@@ -1,0 +1,77 @@
+package com.company.opexhub.repository;
+
+import com.company.opexhub.entity.WorkflowTransaction;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+
+@Repository
+public interface WorkflowTransactionRepository extends JpaRepository<WorkflowTransaction, Long> {
+    
+    List<WorkflowTransaction> findByInitiativeIdOrderByStageNumber(Long initiativeId);
+    
+    List<WorkflowTransaction> findByApproveStatus(String approveStatus);
+    
+    List<WorkflowTransaction> findByPendingWith(String pendingWith);
+    
+    List<WorkflowTransaction> findBySiteAndPendingWith(String site, String pendingWith);
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.initiativeId = :initiativeId AND wt.stageNumber = :stageNumber")
+    Optional<WorkflowTransaction> findByInitiativeIdAndStageNumber(@Param("initiativeId") Long initiativeId, 
+                                                                 @Param("stageNumber") Integer stageNumber);
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.approveStatus = 'pending' AND wt.pendingWith = :roleCode")
+    List<WorkflowTransaction> findPendingTransactionsByRole(@Param("roleCode") String roleCode);
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.approveStatus = 'pending' AND wt.site = :site AND wt.pendingWith = :roleCode")
+    List<WorkflowTransaction> findPendingTransactionsBySiteAndRole(@Param("site") String site, @Param("roleCode") String roleCode);
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.initiativeId = :initiativeId AND wt.approveStatus = 'pending' ORDER BY wt.stageNumber ASC")
+    List<WorkflowTransaction> findCurrentPendingStageCandidates(@Param("initiativeId") Long initiativeId);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.initiativeId = :initiativeId AND wt.approveStatus = 'approved'")
+    Integer countApprovedStages(@Param("initiativeId") Long initiativeId);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.initiativeId = :initiativeId")
+    Integer countTotalStages(@Param("initiativeId") Long initiativeId);
+    
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.stageNumber = 9 AND wt.approveStatus = 'approved'")
+    List<WorkflowTransaction> findInitiativesReadyForClosure();
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.stageNumber = :stageNumber AND wt.approveStatus = :approveStatus AND wt.site = :site")
+    List<WorkflowTransaction> findByStageNumberAndApproveStatusAndSite(@Param("stageNumber") Integer stageNumber, 
+                                                                      @Param("approveStatus") String approveStatus, 
+                                                                      @Param("site") String site);
+    
+    @Query("SELECT wt FROM WorkflowTransaction wt WHERE wt.stageNumber = :stageNumber AND wt.approveStatus = :approveStatus")
+    List<WorkflowTransaction> findByStageNumberAndApproveStatus(@Param("stageNumber") Integer stageNumber, 
+                                                               @Param("approveStatus") String approveStatus);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countByApproveStatusAndPendingWithIsNotNull(@Param("approveStatus") String approveStatus);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.site = :site AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countBySiteAndApproveStatusAndPendingWithIsNotNull(@Param("site") String site, @Param("approveStatus") String approveStatus);
+    
+    // Trend calculation queries for previous month comparison
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL AND wt.createdAt >= :startDate AND wt.createdAt <= :endDate")
+    Long countByApproveStatusAndPendingWithIsNotNullAndCreatedAtBetween(@Param("approveStatus") String approveStatus, @Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt WHERE wt.site = :site AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL AND wt.createdAt >= :startDate AND wt.createdAt <= :endDate")
+    Long countBySiteAndApproveStatusAndPendingWithIsNotNullAndCreatedAtBetween(@Param("site") String site, @Param("approveStatus") String approveStatus, @Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate);
+    
+    // Find workflow transactions by assigned user ID (for IL assignments)
+    List<WorkflowTransaction> findByAssignedUserId(Long assignedUserId);
+    
+    // Additional methods for financial year filtering by initiative creation date
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt JOIN Initiative i ON wt.initiativeId = i.id WHERE i.createdAt >= :startDate AND i.createdAt <= :endDate AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(@Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate, @Param("approveStatus") String approveStatus);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt JOIN Initiative i ON wt.initiativeId = i.id WHERE wt.site = :site AND i.createdAt >= :startDate AND i.createdAt <= :endDate AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(@Param("site") String site, @Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate, @Param("approveStatus") String approveStatus);
+}

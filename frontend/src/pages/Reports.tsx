@@ -1,0 +1,1313 @@
+import { useState, useEffect, useMemo } from "react";
+import { User } from "@/lib/mockData";
+import { useInitiatives } from "@/hooks/useInitiatives";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, ComposedChart } from 'recharts';
+import { 
+  Download, 
+  Calendar, 
+  TrendingUp, 
+  FileText, 
+  Filter, 
+  BarChart3, 
+  AlertTriangle, 
+  RefreshCw, 
+  FileSpreadsheet,
+  Activity,
+  PieChart,
+  Target,
+  IndianRupee
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { reportsAPI } from "@/lib/api";
+import { monthlyMonitoringAPI } from "@/lib/api";
+import DNLBarChart from "@/components/DNLBarChart";
+
+interface ReportsProps {
+  user: User;
+}
+
+interface MonthlyData {
+  month: string;
+  initiatives: number;
+  savings: number;
+  completed: number;
+  actualSavings: number; // Keep for backward compatibility
+  targetValue: number; // Add target value
+  achievedValue: number; // Add achieved value
+}
+
+interface DNLChartData {
+  processedData: number[][];
+}
+
+interface FinancialYearData {
+  month: string;
+  lastFYCumulativeSavings: number;
+  potentialMonthlySavingsCumulative: number;
+  actualSavings: number;
+  monthlyCumulativeProjectedSavings: number;
+  currentFYTarget: number;
+}
+
+export default function Reports({ user }: ReportsProps) {
+  // Debug render cycles
+  console.log('🔄 Reports component render - timestamp:', Date.now());
+  
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('yearly'); // Default to yearly
+  const [selectedSite, setSelectedSite] = useState<string>('all');
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  
+  // New filter states
+  const [selectedFinancialYear, setSelectedFinancialYear] = useState<string>('');
+  const [selectedBudgetType, setSelectedBudgetType] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  
+  // Pagination state for detailed tab
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(10);
+  
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [monthlyActualSavingsData, setMonthlyActualSavingsData] = useState<any>(null);
+  const [monthlyTargetAchievedData, setMonthlyTargetAchievedData] = useState<any>(null);
+  const [dnlChartData, setDnlChartData] = useState<DNLChartData | null>(null);
+  const [financialYearData, setFinancialYearData] = useState<FinancialYearData[]>([]);
+  const [availableFinancialYears, setAvailableFinancialYears] = useState<string[]>([]);
+  
+  const [loadingChart, setLoadingChart] = useState<boolean>(false);
+  const [loadingFinancialData, setLoadingFinancialData] = useState<boolean>(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [financialDataError, setFinancialDataError] = useState<string | null>(null);
+  
+  const { data: initiativesData, isLoading } = useInitiatives();
+  const { toast } = useToast();
+  
+  // Memoize initiatives to prevent infinite re-renders
+  const initiatives = useMemo(() => {
+    const result = initiativesData?.content || initiativesData || [];
+    console.log('🔄 Initiatives memoized, length:', result.length);
+    return result;
+  }, [initiativesData]);
+
+  // Filter initiatives based on selected site and filters - MOVED BEFORE EARLY RETURN
+  const filteredInitiatives = useMemo(() => {
+    let filtered = selectedSite === 'all' ? initiatives : initiatives.filter((i: any) => i.site === selectedSite);
+    
+    // Apply budget type filter
+    if (selectedBudgetType !== 'all') {
+      filtered = filtered.filter((i: any) => 
+        (selectedBudgetType === 'budgeted' && (!i.budgetType || i.budgetType.toLowerCase() === 'budgeted')) ||
+        (selectedBudgetType === 'non-budgeted' && i.budgetType && i.budgetType.toLowerCase() === 'non-budgeted')
+      );
+    }
+    
+    return filtered;
+  }, [initiatives, selectedSite, selectedBudgetType]);
+
+  // Filter initiatives for amount-related calculations (exclude Rejected and Dropped) - Similar to KPI.tsx
+  const filteredInitiativesForAmounts = useMemo(() => {
+    return filteredInitiatives.filter((i: any) => i.status !== 'Rejected' && i.status !== 'Dropped');
+  }, [filteredInitiatives]);
+
+  // Pagination logic for detailed tab
+  const totalPages = Math.ceil(filteredInitiatives.length / itemsPerPage);
+  const paginatedInitiatives = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredInitiatives.slice(startIndex, endIndex);
+  }, [filteredInitiatives, currentPage, itemsPerPage]);
+
+  // Reset current page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSite, selectedBudgetType, selectedCategory, selectedFinancialYear]);
+
+  // Enhanced currency formatting for improved display
+  const formatCurrency = (amount: number): string => {
+    if (amount >= 10000000) { // 1 crore or more (1,00,00,000)
+      return `₹${(amount / 10000000).toFixed(2)}Cr`;
+    } else if (amount >= 100000) { // 1 lakh or more (1,00,000)
+      return `₹${(amount / 100000).toFixed(1)}L`;
+    } else if (amount >= 1000) { // 1 thousand or more
+      return `₹${(amount / 1000).toFixed(1)}K`;
+    } else {
+      return `₹${amount.toLocaleString('en-IN')}`;
+    }
+  };
+
+  // Format large numbers for display in cards
+  const formatDisplayNumber = (amount: number): string => {
+    if (amount >= 10000000) { // 1 crore or more
+      return `${(amount / 10000000).toFixed(2)}Cr`;
+    } else if (amount >= 100000) { // 1 lakh or more
+      return `${(amount / 100000).toFixed(1)}L`;
+    } else if (amount >= 1000) { // 1 thousand or more
+      return `${(amount / 1000).toFixed(1)}K`;
+    } else {
+      return amount.toLocaleString('en-IN');
+    }
+  };
+
+  // Generate dynamic monthly data based on current fiscal year - with filtering support
+  useEffect(() => {
+    const generateDynamicMonthlyData = async () => {
+      try {
+        // Use current financial year if selectedFinancialYear is not set
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        const fiscalYearStart = currentMonth >= 3 ? currentYear : currentYear - 1;
+        
+        const yearToUse = selectedFinancialYear || fiscalYearStart.toString();
+        
+        // Convert short year to full year for API calls
+        const fullYearToUse = yearToUse.length === 2 ? `20${yearToUse}` : yearToUse;
+        
+        console.log('🔍 Generating monthly data for FY:', yearToUse, 'selectedFinancialYear:', selectedFinancialYear);
+        console.log('🔍 Full year for API calls:', fullYearToUse);
+        
+        const months = [
+          'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+          'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'
+        ];
+        
+        const dynamicData: MonthlyData[] = [];
+        
+        // Fetch actual savings data with current filters
+        let actualSavingsData: any = {};
+        try {
+          const actualSavingsResponse = await monthlyMonitoringAPI.getMonthlyActualSavings({
+            site: selectedSite !== 'all' ? selectedSite : undefined,
+            year: fullYearToUse,
+            budgetType: selectedBudgetType !== 'all' ? selectedBudgetType : undefined,
+          });
+          // Extract actual data from the ApiResponse structure
+          actualSavingsData = actualSavingsResponse?.data || {};
+          
+          // Validate that we have the expected data structure
+          if (!actualSavingsData || typeof actualSavingsData !== 'object') {
+            console.warn('Invalid actual savings data structure:', actualSavingsData);
+            actualSavingsData = {};
+          }
+          
+          console.log('Actual Savings Data Response:', actualSavingsResponse);
+          console.log('Extracted Actual Savings Data:', actualSavingsData);
+          setMonthlyActualSavingsData(actualSavingsResponse);
+        } catch (error) {
+          console.warn('Could not fetch actual savings data:', error);
+          actualSavingsData = {};
+        }
+
+        // Fetch target vs achieved data with current filters
+        let targetAchievedData: any = {};
+        try {
+          const targetAchievedResponse = await monthlyMonitoringAPI.getMonthlyTargetAchievedData({
+            site: selectedSite !== 'all' ? selectedSite : undefined,
+            year: fullYearToUse,
+            budgetType: selectedBudgetType !== 'all' ? selectedBudgetType : undefined,
+          });
+          
+          // Extract actual data from the ApiResponse structure
+          targetAchievedData = targetAchievedResponse?.data || {};
+          
+          // Validate that we have the expected data structure
+          if (!targetAchievedData || typeof targetAchievedData !== 'object') {
+            console.warn('Invalid target achieved data structure:', targetAchievedData);
+            targetAchievedData = {};
+          }
+          
+          console.log('Target Achieved Data Response:', targetAchievedResponse);
+          console.log('Extracted Target Achieved Data:', targetAchievedData);
+          console.log('Target Achieved Data Keys:', Object.keys(targetAchievedData));
+          
+          // Debug each month's data structure
+          Object.entries(targetAchievedData).forEach(([key, value]) => {
+            console.log(`Month ${key}:`, value);
+          });
+          
+          setMonthlyTargetAchievedData(targetAchievedResponse);
+        } catch (error) {
+          console.warn('Could not fetch target vs achieved data:', error);
+          console.error('Target Achieved API Error Details:', error);
+          targetAchievedData = {};
+        }
+        
+        for (let i = 0; i < months.length; i++) {
+          const monthIndex = (3 + i) % 12; // Start from April (index 3)
+          const fiscalStartYear = yearToUse.length === 2 ? parseInt(`20${yearToUse}`) : parseInt(yearToUse);
+          const year = monthIndex < 3 ? fiscalStartYear + 1 : fiscalStartYear;
+          
+          // For historical fiscal years, show all months. For current fiscal year, show up to current month
+          const isCurrentFiscalYear = (currentMonth >= 3 && fiscalStartYear === currentYear) || 
+                                     (currentMonth < 3 && fiscalStartYear === currentYear - 1);
+          const isPastMonth = isCurrentFiscalYear ? 
+                             (monthIndex < currentMonth || (currentMonth < 3 && monthIndex >= 3)) :
+                             true; // For historical years, show all months
+          
+          if (isPastMonth || monthIndex === currentMonth) {
+            // Calculate dynamic values based on filtered initiatives for the month (exclude Rejected and Dropped)
+            const monthInitiatives = filteredInitiatives.filter((initiative: any) => {
+              try {
+                const startDate = new Date(initiative.submittedDate || initiative.startDate);
+                return startDate.getMonth() === monthIndex && startDate.getFullYear() === year;
+              } catch (e) {
+                console.warn('Error parsing initiative date:', e);
+                return false;
+              }
+            });
+            
+            // Filter out Rejected and Dropped initiatives from amount calculations
+            const monthInitiativesForAmounts = monthInitiatives.filter((i: any) => 
+              i.status !== 'Rejected' && i.status !== 'Dropped'
+            );
+            
+            const expectedSavings = monthInitiativesForAmounts.reduce((sum: number, initiative: any) => {
+              try {
+                const savingsValue = typeof initiative.expectedSavings === 'string' 
+                  ? parseFloat(initiative.expectedSavings.replace(/[₹L,]/g, '')) || 0
+                  : initiative.expectedSavings || 0;
+                return sum + savingsValue;
+              } catch (e) {
+                console.warn('Error parsing savings value:', e);
+                return sum;
+              }
+            }, 0);
+            
+            const completedCount = monthInitiatives.filter((i: any) => i.status === 'Completed').length;
+            
+            // Get actual savings for this month from the API response
+            const monthKey = months[i];
+            const actualSavingsForMonth = actualSavingsData[monthKey] || 0;
+            
+            // Get target and achieved values from the monthly monitoring data
+            const monthTargetData = targetAchievedData[monthKey];
+            let targetValue = 0;
+            let achievedValue = 0;
+            
+            if (monthTargetData && typeof monthTargetData === 'object') {
+              // Backend returns "target" and "achieved" fields based on MonthlyMonitoringService.java
+              targetValue = monthTargetData.target || 0;
+              achievedValue = monthTargetData.achieved || 0;
+              
+              // Handle values that might come as strings or numbers
+              if (typeof targetValue === 'string') {
+                targetValue = parseFloat(targetValue) || 0;
+              }
+              if (typeof achievedValue === 'string') {
+                achievedValue = parseFloat(achievedValue) || 0;
+              }
+            }
+            
+            // Debug logging
+            console.log(`Month ${monthKey}:`, {
+              monthTargetData,
+              targetValue,
+              achievedValue,
+              targetAchievedData,
+              actualSavingsForMonth,
+              finalTargetValue: targetValue,
+              finalAchievedValue: achievedValue
+            });
+            
+            dynamicData.push({
+              month: months[i],
+              initiatives: monthInitiatives.length,
+              savings: expectedSavings,
+              completed: completedCount,
+              actualSavings: actualSavingsForMonth,
+              targetValue: targetValue,
+              achievedValue: achievedValue
+            });
+          }
+        }
+        
+        console.log('Final Dynamic Data:', dynamicData);
+        console.log('Dynamic Data Length:', dynamicData.length);
+        console.log('Sample item:', dynamicData[0]);
+        console.log('Target/Achieved Summary:', dynamicData.map(d => ({ 
+          month: d.month, 
+          target: d.targetValue, 
+          achieved: d.achievedValue 
+        })));
+        
+        // Additional validation - check if we have any non-zero values
+        const hasTargetData = dynamicData.some(d => d.targetValue > 0);
+        const hasAchievedData = dynamicData.some(d => d.achievedValue > 0);
+        console.log('Has Target Data:', hasTargetData, 'Has Achieved Data:', hasAchievedData);
+        
+        return dynamicData;
+      } catch (error) {
+        console.error('Error generating monthly data:', error);
+        return []; // Return empty array on error
+      }
+    };
+
+    generateDynamicMonthlyData().then(setMonthlyData);
+  }, [initiatives, selectedSite, selectedBudgetType, selectedFinancialYear]); // Use base initiatives instead of filtered to prevent loops
+
+  // Fetch available financial years on component mount
+  useEffect(() => {
+    const fetchAvailableFinancialYears = async () => {
+      try {
+        const years = await reportsAPI.getAvailableFinancialYears();
+        setAvailableFinancialYears(years);
+        if (years.length > 0 && !selectedFinancialYear) {
+          setSelectedFinancialYear(years[0]); // Set current FY as default
+        }
+      } catch (error) {
+        console.error('Error fetching available financial years:', error);
+      }
+    };
+
+    fetchAvailableFinancialYears();
+  }, []);
+
+  // Fetch financial year data whenever filters change
+  // IMPORTANT: Backend API needs to be updated to exclude Rejected/Dropped initiatives 
+  // from potentialMonthlySavingsCumulative calculations to show ₹0 for these initiatives
+  useEffect(() => {
+    if (!selectedFinancialYear) return;
+    
+    let isMounted = true;
+    
+    const fetchFinancialYearData = async () => {
+      setLoadingFinancialData(true);
+      setFinancialDataError(null);
+      
+      try {
+        const fullYear = selectedFinancialYear && selectedFinancialYear.length === 2 ? `20${selectedFinancialYear}` : selectedFinancialYear;
+        console.log('🔍 Financial Year API - Selected:', selectedFinancialYear, 'Full Year:', fullYear);
+        const data = await reportsAPI.getFinancialYearData({
+          financialYear: fullYear,
+          site: selectedSite !== 'all' ? selectedSite : undefined,
+          budgetType: selectedBudgetType !== 'all' ? selectedBudgetType : undefined,
+          category: selectedCategory !== 'all' ? selectedCategory : undefined
+        });
+        
+        if (isMounted) {
+          // Transform the data for chart display
+          const chartData: FinancialYearData[] = [];
+          const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+          
+          months.forEach(month => {
+            const monthData = data.monthlyData[month];
+            if (monthData) {
+              chartData.push({
+                month: month,
+                lastFYCumulativeSavings: parseFloat(monthData.lastFYCumulativeSavings || 0),
+                potentialMonthlySavingsCumulative: parseFloat(monthData.potentialMonthlySavingsCumulative || 0),
+                actualSavings: parseFloat(monthData.actualSavings || 0),
+                monthlyCumulativeProjectedSavings: parseFloat(monthData.monthlyCumulativeProjectedSavings || 0),
+                currentFYTarget: parseFloat(monthData.currentFYTarget || 0)
+              });
+            }
+          });
+          
+          setFinancialYearData(chartData);
+          setFinancialDataError(null);
+        }
+      } catch (error: any) {
+        console.error('Error fetching financial year data:', error);
+        if (isMounted) {
+          setFinancialYearData([]);
+          setFinancialDataError('Failed to load financial year data. Please try again.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingFinancialData(false);
+        }
+      }
+    };
+
+    fetchFinancialYearData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedFinancialYear, selectedSite, selectedBudgetType, selectedCategory]);
+
+  // Fetch DNL chart data when filters change
+  // IMPORTANT: Backend API needs to be updated to exclude Rejected/Dropped initiatives
+  // from DNL savings calculations to show ₹0 for these initiatives
+  useEffect(() => {
+    let isMounted = true; // Flag to prevent state updates if component unmounts
+    
+    const fetchDNLChartData = async () => {
+      setLoadingChart(true);
+      setChartError(null); // Clear previous errors
+      try {
+        const fullYear = selectedFinancialYear && selectedFinancialYear.length === 2 ? `20${selectedFinancialYear}` : selectedFinancialYear;
+        const data = await reportsAPI.getDNLSavingsData({
+          site: selectedSite !== 'all' ? selectedSite : undefined,
+          period: selectedPeriod,
+          year: fullYear
+        });
+        
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setDnlChartData(data);
+          setChartError(null);
+        }
+      } catch (error: any) {
+        console.error('Error fetching DNL chart data:', error);
+        if (isMounted) {
+          setDnlChartData(null);
+          // Set user-friendly error message
+          if (error?.response?.status === 500) {
+            setChartError('Server error: Unable to fetch chart data. Please try again later or contact support.');
+          } else if (error?.response?.status === 404) {
+            setChartError('No data found for the selected filters.');
+          } else {
+            setChartError('Failed to load chart data. Please check your connection and try again.');
+          }
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingChart(false);
+        }
+      }
+    };
+
+    fetchDNLChartData();
+    
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSite, selectedPeriod, selectedFinancialYear]); // Only trigger on filter changes
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-4 space-y-4 max-w-6xl">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="text-sm text-muted-foreground">Loading reports data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Get unique sites for filter
+  const sites = [...new Set(initiatives.map((i: any) => i.site))];
+
+  // Calculate summary statistics from filtered data (exclude Rejected and Dropped for amounts)
+  const totalSavings = filteredInitiativesForAmounts.reduce((sum: number, i: any) => {
+    const savings = typeof i.expectedSavings === 'string' 
+      ? parseFloat(i.expectedSavings.replace(/[₹L,]/g, '')) || 0
+      : i.expectedSavings || 0;
+    return sum + savings;
+  }, 0);
+  const completedCount = filteredInitiatives.filter((i: any) => i.status === 'Completed').length;
+  const inProgressCount = filteredInitiatives.filter((i: any) => i.status === 'In Progress').length;
+  const avgSavingsPerInitiative = filteredInitiativesForAmounts.length > 0 ? totalSavings / filteredInitiativesForAmounts.length : 0;
+
+  const handleDownloadReport = async (reportType: string) => {
+    if (reportType === 'DNL Plant Initiatives PDF') {
+      try {
+        // Use the new DNL Plant Initiatives PDF export with current year as default
+        const currentYear = new Date().getFullYear();
+        const filename = await reportsAPI.downloadDNLPlantInitiatives({
+          site: selectedSite,
+          period: selectedPeriod === 'yearly' ? 'yearly' : selectedPeriod,
+          year: selectedFinancialYear || currentYear.toString()
+        });
+        
+        console.log(`Successfully downloaded DNL Plant Initiatives PDF report: ${filename} for ${selectedSite} site(s) - ${selectedPeriod} period (${selectedFinancialYear})`);
+        toast({
+          title: "Download Successful",
+          description: `DNL Plant Initiatives PDF report "${filename}" downloaded successfully for year ${selectedFinancialYear}!`,
+        });
+      } catch (error: any) {
+        console.error('Error downloading DNL Plant Initiatives PDF report:', error);
+        let errorMessage = 'Failed to download DNL Plant Initiatives PDF report. ';
+        if (error?.response?.status === 500) {
+          errorMessage += 'Server error occurred. Please try again later.';
+        } else if (error?.response?.status === 404) {
+          errorMessage += 'No data found for selected filters.';
+        } else {
+          errorMessage += 'Please check your connection and try again.';
+        }
+        toast({
+          title: "Download Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } else if (reportType === 'DNL Chart PDF') {
+      try {
+        const filename = await reportsAPI.downloadDNLChartPDF({
+          site: selectedSite !== 'all' ? selectedSite : undefined,
+          period: selectedPeriod,
+          year: selectedFinancialYear
+        });
+        
+        console.log(`Successfully downloaded DNL Chart PDF: ${filename}`);
+        toast({
+          title: "Download Successful",
+          description: `DNL Chart PDF "${filename}" downloaded successfully!`,
+        });
+      } catch (error: any) {
+        console.error('Error downloading DNL Chart PDF:', error);
+        let errorMessage = 'Failed to download DNL Chart PDF. ';
+        if (error?.response?.status === 500) {
+          errorMessage += 'Server error: PDF generation failed. This might be due to chart rendering issues. Please contact support.';
+        } else if (error?.response?.status === 404) {
+          errorMessage += 'No data found for selected filters.';
+        } else {
+          errorMessage += 'Please check your connection and try again.';
+        }
+        toast({
+          title: "Download Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } else if (reportType === 'DNL Chart Excel') {
+      try {
+        const filename = await reportsAPI.downloadDNLChartExcel({
+          site: selectedSite !== 'all' ? selectedSite : undefined,
+          period: selectedPeriod,
+          year: selectedFinancialYear
+        });
+        
+        console.log(`Successfully downloaded DNL Chart Excel: ${filename}`);
+        toast({
+          title: "Download Successful",
+          description: `DNL Chart Excel "${filename}" downloaded successfully with embedded charts and data table!`,
+        });
+      } catch (error: any) {
+        console.error('Error downloading DNL Chart Excel:', error);
+        let errorMessage = 'Failed to download DNL Chart Excel. ';
+        if (error?.response?.status === 500) {
+          errorMessage += 'Server error: Excel generation failed. This might be due to chart embedding issues. Please contact support.';
+        } else if (error?.response?.status === 404) {
+          errorMessage += 'No data found for selected filters.';
+        } else {
+          errorMessage += 'Please check your connection and try again.';
+        }
+        toast({
+          title: "Download Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } else if (reportType === 'Detailed Report (Excel)') {
+      try {
+        // Use the centralized API with proper authentication
+        const filename = await reportsAPI.downloadDetailedExcel({
+          site: selectedSite,
+          year: selectedFinancialYear || new Date().getFullYear().toString()
+        });
+        
+        console.log(`Successfully downloaded detailed Excel report: ${filename} for ${selectedSite} site(s)`);
+        toast({
+          title: "Download Successful",
+          description: `Excel report "${filename}" downloaded successfully!`,
+        });
+      } catch (error: any) {
+        console.error('Error downloading Excel report:', error);
+        let errorMessage = 'Failed to download Excel report. ';
+        if (error?.response?.status === 500) {
+          errorMessage += 'Server error occurred. Please try again later.';
+        } else if (error?.response?.status === 404) {
+          errorMessage += 'No data found for selected filters.';
+        } else {
+          errorMessage += 'Please check your connection and try again.';
+        }
+        toast({
+          title: "Download Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } else if (reportType === 'MOM Report (Excel)') {
+      try {
+        const filename = await reportsAPI.downloadMOMReport({
+          site: selectedSite !== 'all' ? selectedSite : undefined,
+          year: selectedFinancialYear || new Date().getFullYear().toString()
+        });
+        
+        console.log(`Successfully downloaded MOM report: ${filename} for ${selectedSite} site(s)`);
+        toast({
+          title: "Download Successful",
+          description: `MOM report "${filename}" downloaded successfully!`,
+        });
+      } catch (error: any) {
+        console.error('Error downloading MOM report:', error);
+        let errorMessage = 'Failed to download MOM report. ';
+        if (error?.response?.status === 500) {
+          errorMessage += 'Server error occurred. Please try again later.';
+        } else if (error?.response?.status === 404) {
+          errorMessage += 'No MOM data found for selected filters.';
+        } else {
+          errorMessage += 'Please check your connection and try again.';
+        }
+        toast({
+          title: "Download Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Mock download functionality for other reports
+      console.log(`Downloading ${reportType} report for ${selectedSite} site(s) - ${selectedPeriod} period`);
+      toast({
+        title: "Download Started",
+        description: `${reportType} report download started`,
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'completed': return 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500';
+      case 'in progress': return 'bg-blue-500 hover:bg-blue-600 text-white border-blue-500';
+      case 'rejected': return 'bg-red-500 hover:bg-red-600 text-white border-red-500';
+      case 'dropped': return 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500';
+      case 'draft': return 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500';
+      case 'approved': return 'bg-green-500 hover:bg-green-600 text-white border-green-500';
+      case 'pending': return 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500';
+      default: return 'bg-slate-500 hover:bg-slate-600 text-white border-slate-500';
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high': return 'bg-red-500 hover:bg-red-600 text-white border-red-500';
+      case 'medium': return 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500';
+      case 'low': return 'bg-green-500 hover:bg-green-600 text-white border-green-500';
+      default: return 'bg-slate-500 hover:bg-slate-600 text-white border-slate-500';
+    }
+  };
+
+  // Dynamic method to get current month
+  const getCurrentMonth = () => {
+    const now = new Date();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[now.getMonth()];
+  };
+
+  // Dynamic method to get current fiscal year
+  const getCurrentFiscalYear = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    // Fiscal year starts from April, so if current month is Jan-Mar, FY is previous year
+    if (now.getMonth() >= 3) {
+      return String(year + 1).slice(-2); // e.g., "26" for 2026
+    } else {
+      return String(year).slice(-2); // e.g., "25" for 2025
+    }
+  };
+
+  // // Summary stats array for consistent card design
+  // const summaryStats = [
+  //   {
+  //     title: "Total Initiatives",
+  //     value: filteredInitiatives.length.toString(),
+  //     change: "+12%",
+  //     trend: "up",
+  //     icon: FileText,
+  //     color: "text-blue-600",
+  //     description: `${completedCount} completed, ${inProgressCount} in progress`
+  //   },
+  //   {
+  //     title: "Total Savings",
+  //     value: `₹${formatDisplayNumber(totalSavings)}`,
+  //     change: "+28%",
+  //     trend: "up",
+  //     icon: TrendingUp,
+  //     color: "text-green-600",
+  //     description: "Expected savings from all initiatives"
+  //   },
+  //   {
+  //     title: "Avg per Initiative",
+  //     value: `₹${formatDisplayNumber(avgSavingsPerInitiative)}`,
+  //     change: "+15%",
+  //     trend: "up",
+  //     icon: Target,
+  //     color: "text-purple-600",
+  //     description: "Average expected savings"
+  //   },
+  //   {
+  //     title: "Completion Rate",
+  //     value: `${filteredInitiatives.length > 0 ? ((completedCount / filteredInitiatives.length) * 100).toFixed(1) : 0}%`,
+  //     change: "+8%",
+  //     trend: "up",
+  //     icon: TrendingUp,
+  //     color: "text-emerald-600",
+  //     description: "Initiatives completed successfully"
+  //   }
+  // ];
+
+  return (
+    <div className="container mx-auto space-y-4 max-w-6xl">
+      {/* Header - Match Dashboard style */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Reports & Analytics
+          </h1>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            Generate and analyze initiative performance reports (Data till {getCurrentMonth()} {new Date().getFullYear()})
+          </p>
+        </div>
+      </div>
+
+      {/* Enhanced Filters - Match Dashboard card style */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Filter className="h-4 w-4 text-blue-600" />
+            Report Filters
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Select filters to customize your reports and analysis
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Site</label>
+              <Select value={selectedSite} onValueChange={setSelectedSite}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sites</SelectItem>
+                  {sites.map((site: string) => (
+                    <SelectItem key={site} value={site}>{site}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Year Filter for Trends - HIDDEN */}
+            {false && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Year</label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={(new Date().getFullYear()).toString()}>{new Date().getFullYear()}</SelectItem>
+                  <SelectItem value={(new Date().getFullYear() - 1).toString()}>{new Date().getFullYear() - 1}</SelectItem>
+                  <SelectItem value={(new Date().getFullYear() - 2).toString()}>{new Date().getFullYear() - 2}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            )}
+
+            {/* Financial Year Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Financial Year</label>
+              <Select value={selectedFinancialYear} onValueChange={setSelectedFinancialYear}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="Select FY" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableFinancialYears.map((fy) => (
+                    <SelectItem key={fy} value={fy}>FY {fy}-{(parseInt(fy) + 1).toString().slice(-2)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Budget Type Filter */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Budget Type</label>
+              <Select value={selectedBudgetType} onValueChange={setSelectedBudgetType}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="budgeted">Budgeted</SelectItem>
+                  <SelectItem value="non-budgeted">Non-Budgeted</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Category Filter - HIDDEN */}
+            {false && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Category</label>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="rmc">RMC</SelectItem>
+                  <SelectItem value="environment">Environment</SelectItem>
+                  <SelectItem value="spent acid">Spent Acid</SelectItem>
+                  <SelectItem value="others">Others</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary Cards - Match Dashboard pattern
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {summaryStats.map((stat) => (
+          <Card key={stat.title} className="relative overflow-hidden group hover:shadow-md transition-all duration-200 shadow-sm">
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent to-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10 pt-3 px-3">
+              <CardTitle className="text-xs font-medium text-muted-foreground">
+                {stat.title}
+              </CardTitle>
+              <div className={`p-1.5 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200`}>
+                <stat.icon className={`h-3.5 w-3.5 ${stat.color}`} />
+              </div>
+            </CardHeader>
+            <CardContent className="pb-3 relative z-10 px-3">
+              <div className="text-xl font-bold break-words mb-1">
+                {stat.value}
+              </div>
+              <p className="text-2xs text-muted-foreground mb-1">
+                {stat.description}
+              </p>
+              <p className={`text-2xs flex items-center gap-1 ${
+                stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
+              }`}>
+                <TrendingUp className="h-2.5 w-2.5" />
+                {stat.change} from last month
+              </p>
+            </CardContent>
+          </Card>
+        ))}
+      </div> */}
+
+      {/* Tab Navigation - Match Dashboard style */}
+      <Tabs defaultValue="trends" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 h-9">
+          <TabsTrigger value="trends" className="flex items-center gap-1.5 text-xs">
+            <Activity className="h-3.5 w-3.5" />
+            Trends
+          </TabsTrigger>
+          <TabsTrigger value="financial-year" className="flex items-center gap-1.5 text-xs">
+            <IndianRupee className="h-3.5 w-3.5" />
+            Financial
+          </TabsTrigger>
+          <TabsTrigger value="dnl-chart" className="flex items-center gap-1.5 text-xs">
+            <BarChart3 className="h-3.5 w-3.5" />
+            DNL Chart
+          </TabsTrigger>
+          <TabsTrigger value="detailed" className="flex items-center gap-1.5 text-xs">
+            <FileText className="h-3.5 w-3.5" />
+            Detailed
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="trends" className="space-y-4 mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Activity className="h-4 w-4 text-blue-600" />
+                  Monthly Initiative Trends (FY'{selectedFinancialYear ? selectedFinancialYear + '-' + (parseInt(selectedFinancialYear) + 1).toString().slice(-2) : getCurrentFiscalYear()})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Initiative submission and completion trends
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  console.log('Monthly Data for Chart:', monthlyData);
+                  console.log('Sample month data:', monthlyData[0]);
+                  return null;
+                })()}
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="initiatives" stroke="#2563EB" strokeWidth={2} name="New Initiatives" />
+                    <Line type="monotone" dataKey="completed" stroke="#059669" strokeWidth={2} name="Completed" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <IndianRupee className="h-4 w-4 text-green-600" />
+                  Monthly Savings Trends (FY'{selectedFinancialYear ? selectedFinancialYear + '-' + (parseInt(selectedFinancialYear) + 1).toString().slice(-2) : getCurrentFiscalYear()})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Target vs Achieved value
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  console.log('Target vs Achieved Monthly Data:', monthlyData);
+                  console.log('Sample data for bars:', monthlyData.map(m => ({
+                    month: m.month,
+                    targetValue: m.targetValue,
+                    achievedValue: m.achievedValue
+                  })));
+                  console.log('Data being passed to BarChart:', monthlyData);
+                  console.log('Total non-zero target values:', monthlyData.filter(m => m.targetValue > 0).length);
+                  console.log('Total non-zero achieved values:', monthlyData.filter(m => m.achievedValue > 0).length);
+                  return null;
+                })()}
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value, name) => {
+                      const labels: { [key: string]: string } = {
+                        'targetValue': 'Target Value',
+                        'achievedValue': 'Achieved Value'
+                      };
+                      return [formatCurrency(Number(value)), labels[name] || name];
+                    }} />
+                    <Bar dataKey="targetValue" fill="#2563EB" name="Target Value" />
+                    <Bar dataKey="achievedValue" fill="#059669" name="Achieved Value" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Financial Year Tab */}
+        <TabsContent value="financial-year" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <BarChart3 className="h-4 w-4 text-blue-600" />
+                    Financial Year Analysis (FY {selectedFinancialYear}-{selectedFinancialYear ? (parseInt(selectedFinancialYear) + 1).toString().slice(-2) : ''})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Comprehensive savings analysis by category and budget type.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingFinancialData ? (
+                <div className="flex items-center justify-center h-80">
+                  <div className="flex items-center space-x-2 text-muted-foreground">
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <span>Loading financial year data...</span>
+                  </div>
+                </div>
+              ) : financialDataError ? (
+                <div className="flex flex-col items-center justify-center h-80 space-y-4">
+                  <div className="text-red-600 text-center">
+                    <AlertTriangle className="h-10 w-10 mx-auto mb-3" />
+                    <p className="font-medium">Financial Year Data Unavailable</p>
+                    <p className="text-sm mt-2 max-w-md">{financialDataError}</p>
+                  </div>
+                  <Button 
+                    onClick={() => window.location.reload()} 
+                    variant="outline" 
+                    size="sm"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              ) : financialYearData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={400}>
+                  <ComposedChart data={financialYearData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip formatter={(value, name) => [formatCurrency(Number(value)), name]} />
+                    
+                    {/* Last Financial Year Cumulative Savings - Professional Orange Bar */}
+                    <Bar dataKey="lastFYCumulativeSavings" fill="#EA580C" name="Last FY Cumulative Savings" />
+                    
+                    {/* Current Financial Year Target - Professional Blue Bar */}
+                    <Bar dataKey="currentFYTarget" fill="#2563EB" name="Current FY Target" />
+                    
+                    {/* Potential Monthly Savings Cumulative - Thick Professional Blue Line */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="potentialMonthlySavingsCumulative" 
+                      stroke="#1D4ED8" 
+                      strokeWidth={4}
+                      name="Potential Monthly Savings Cumulative"
+                    />
+                    
+                    {/* Actual Savings - Professional Green Line */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="actualSavings" 
+                      stroke="#059669" 
+                      strokeWidth={2}
+                      name="Actual Savings"
+                    />
+                    
+                    {/* Monthly Cumulative Projected Savings - Professional Purple Dashed Line */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="monthlyCumulativeProjectedSavings" 
+                      stroke="#7C3AED" 
+                      strokeWidth={2}
+                      strokeDasharray="5 5"
+                      name="Monthly Cumulative Projected Savings"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-80">
+                  <div className="text-muted-foreground">No financial year data available for selected filters</div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="dnl-chart" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <BarChart3 className="h-4 w-4 text-blue-600" />
+                    DNL Plant Initiatives Chart (FY'{selectedFinancialYear ? selectedFinancialYear + '-' + (parseInt(selectedFinancialYear) + 1).toString().slice(-2) : getCurrentFiscalYear()})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Initiative savings by category - {selectedSite !== 'all' ? selectedSite : 'All Sites'} 
+                    {selectedFinancialYear && ` - FY ${selectedFinancialYear}-${selectedFinancialYear ? (parseInt(selectedFinancialYear) + 1).toString().slice(-2) : ''}`}
+                    {/* Note: Backend API needs to be updated to exclude Rejected/Dropped initiatives. */}
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => handleDownloadReport('DNL Chart Excel')}
+                  className="bg-green-600 hover:bg-green-700 text-white transition-all duration-200 h-9 px-4 text-xs"
+                  disabled={loadingChart || !dnlChartData || !!chartError}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                  Download Excel
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingChart ? (
+                <div className="flex items-center justify-center h-80">
+                  <div className="flex items-center space-x-2 text-muted-foreground">
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <span>Loading chart data...</span>
+                  </div>
+                </div>
+              ) : chartError ? (
+                <div className="flex flex-col items-center justify-center h-80 space-y-4">
+                  <div className="text-red-600 text-center">
+                    <AlertTriangle className="h-10 w-10 mx-auto mb-3" />
+                    <p className="font-medium">Chart Data Unavailable</p>
+                    <p className="text-sm mt-2 max-w-md">{chartError}</p>
+                  </div>
+                  <Button 
+                    onClick={() => window.location.reload()} 
+                    variant="outline" 
+                    size="sm"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retry
+                  </Button>
+                </div>
+              ) : dnlChartData ? (
+                <DNLBarChart 
+                  data={dnlChartData} 
+                  title={`Initiative saving till ${getCurrentMonth()} ${selectedFinancialYear} (Rs. Lacs)`}
+                  year={selectedFinancialYear}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-80">
+                  <div className="text-muted-foreground">No chart data available</div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="detailed" className="space-y-4 mt-4">
+          <Card className="shadow-sm min-h-96">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    Initiative Details
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Detailed view of initiatives ({filteredInitiatives.length} total).
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={() => handleDownloadReport('Detailed Report (Excel)')}
+                    className="bg-green-600 hover:bg-green-700 text-white transition-all duration-200 h-9 px-4 text-xs"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                    Download Excel
+                  </Button>
+                  <Button 
+                    onClick={() => handleDownloadReport('MOM Report (Excel)')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 h-9 px-4 text-xs"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />
+                    Download MOM Report
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {filteredInitiatives.length === 0 ? (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Initiatives Found</h3>
+                  <p className="text-muted-foreground text-sm">No initiatives match the selected filters.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Title</TableHead>
+                          <TableHead className="text-xs">Site</TableHead>
+                          <TableHead className="text-xs">Status</TableHead>
+                          <TableHead className="text-xs">Budget Type</TableHead>
+                          <TableHead className="text-xs">Expected Savings</TableHead>
+                          <TableHead className="text-xs">Start Date</TableHead>
+                          <TableHead className="text-xs">End Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedInitiatives.map((initiative: any) => (
+                          <TableRow key={initiative.id} className="hover:bg-muted/50">
+                            <TableCell className="font-medium text-xs">
+                              <div className="max-w-48 truncate">
+                                {initiative.initiativeNumber || initiative.title}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs">{initiative.site}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge className={`${getStatusColor(initiative.status)} text-xs font-medium shadow-sm`}>
+                                {initiative.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <Badge 
+                                className={`${initiative.budgetType?.toLowerCase() === 'budgeted' ? 
+                                  'bg-blue-500 hover:bg-blue-600 text-white border-blue-500' : 
+                                  'bg-purple-500 hover:bg-purple-600 text-white border-purple-500'} text-xs font-medium shadow-sm`}
+                              >
+                                {initiative.budgetType || 'Budgeted'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs font-medium">
+                              {typeof initiative.expectedSavings === 'string' 
+                                ? initiative.expectedSavings 
+                                : formatCurrency(initiative.expectedSavings || 0)
+                              }
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {initiative.startDate 
+                                ? new Date(initiative.startDate).toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: '2-digit', 
+                                    year: 'numeric'
+                                  })
+                                : 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {initiative.endDate 
+                                ? new Date(initiative.endDate).toLocaleDateString('en-GB', {
+                                    day: '2-digit',
+                                    month: '2-digit', 
+                                    year: 'numeric'
+                                  })
+                                : 'N/A'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t">
+                      <div className="text-xs text-muted-foreground">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredInitiatives.length)} of {filteredInitiatives.length} initiatives
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="h-8 px-3 text-xs"
+                        >
+                          Previous
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          {/* Show page numbers */}
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className="h-8 w-8 p-0 text-xs"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="h-8 px-3 text-xs"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+      </Tabs>
+    </div>
+  );
+}

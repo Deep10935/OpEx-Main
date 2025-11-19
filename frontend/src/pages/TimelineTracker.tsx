@@ -1,0 +1,1294 @@
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { 
+  CalendarIcon, 
+  Plus, 
+  Edit, 
+  Trash2, 
+  CheckCircle, 
+  Clock, 
+  AlertCircle, 
+  Lock,
+  Filter, 
+  RefreshCw, 
+  FileText, 
+  BarChart3, 
+  FileSpreadsheet,
+  Activity,
+  Target,
+  TrendingUp,
+  Search,
+  X
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { timelineTrackerAPI, workflowTransactionAPI } from '@/lib/api';
+
+interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  site: string;
+}
+
+interface Initiative {
+  id: number;
+  initiativeNumber: string;
+  initiativeTitle: string;
+  initiativeStatus: string;
+  site: string;
+  assignedUserEmail: string;
+  expectedSavings: number;
+  description?: string;
+  stageNumber?: number;
+}
+
+interface TimelineEntry {
+  id?: number;
+  stageName: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
+  actualStartDate?: string;
+  actualEndDate?: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED';
+  responsiblePerson: string;
+  remarks?: string;
+  documentPath?: string;
+  // Keeping approval fields for backend compatibility but not using in UI
+  siteLeadApproval: string;
+  initiativeLeadApproval: string;
+  progressPercentage?: number;
+  milestones?: string[];
+}
+
+interface TimelineTrackerProps {
+  user: User;
+}
+
+export default function TimelineTracker({ user }: TimelineTrackerProps) {
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null);
+  const [formData, setFormData] = useState<Partial<TimelineEntry>>({});
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'all' | 'assigned'>('all');
+  
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const itemsPerPage = 8; // Optimized for better display
+
+  // Enhanced currency formatting
+  const formatCurrency = (amount: number): string => {
+    if (amount >= 10000000) { // 1 crore or more
+      return `₹${(amount / 10000000).toFixed(2)}Cr`;
+    } else if (amount >= 100000) { // 1 lakh or more
+      return `₹${(amount / 100000).toFixed(1)}L`;
+    } else if (amount >= 1000) { // 1 thousand or more
+      return `₹${(amount / 1000).toFixed(1)}K`;
+    } else {
+      return `₹${amount.toLocaleString('en-IN')}`;
+    }
+  };
+
+  // Fetch initiatives where Stage 5 is approved and user has access
+  const { data: approvedInitiatives = [], isLoading: initiativesLoading } = useQuery({
+    queryKey: ['stage5-approved-initiatives', user.email, user.site],
+    queryFn: async () => {
+      try {
+        const response = await timelineTrackerAPI.getApprovedInitiatives(user.email, user.site);
+        
+        // Map the response to the expected format
+        return response.data.map((item: any) => ({
+          id: item.initiativeId,
+          initiativeNumber: item.initiativeNumber,
+          initiativeTitle: item.initiativeTitle,
+          initiativeStatus: item.initiativeStatus,
+          site: item.site,
+          assignedUserEmail: item.assignedUserEmail || item.pendingWith,
+          expectedSavings: item.expectedSavings || 0,
+          description: item.description,
+          stageNumber: item.stageNumber
+        }));
+      } catch (error) {
+        console.error('Error fetching approved initiatives:', error);
+        return [];
+      }
+    },
+  });
+
+  // Fetch assigned initiatives where user is the assigned IL
+  const { data: assignedInitiatives = [], isLoading: assignedLoading } = useQuery({
+    queryKey: ['assigned-initiatives', user.email],
+    queryFn: async () => {
+      try {
+        const response = await timelineTrackerAPI.getAssignedInitiatives(user.email);
+        
+        // Map the response to the expected format
+        return response.data.map((item: any) => ({
+          id: item.initiativeId,
+          initiativeNumber: item.initiativeNumber,
+          initiativeTitle: item.initiativeTitle,
+          initiativeStatus: item.initiativeStatus,
+          site: item.site,
+          assignedUserEmail: item.assignedUserEmail || item.pendingWith,
+          expectedSavings: item.expectedSavings || 0,
+          description: item.description,
+          stageNumber: item.stageNumber
+        }));
+      } catch (error) {
+        console.error('Error fetching assigned initiatives:', error);
+        return [];
+      }
+    },
+  });
+
+  // Get current initiatives based on active tab
+  const currentInitiatives = activeTab === 'all' ? approvedInitiatives : assignedInitiatives;
+  const isCurrentlyLoading = activeTab === 'all' ? initiativesLoading : assignedLoading;
+
+  // Filter and search initiatives - Enhanced search
+  const filteredInitiatives = currentInitiatives.filter((initiative: Initiative) => {
+    // Filter out Rejected and Dropped initiatives
+    if (initiative.initiativeStatus === 'Rejected' || initiative.initiativeStatus === 'Dropped') {
+      return false;
+    }
+
+    // Enhanced search - include site and description in search
+    const searchLower = searchTerm.toLowerCase().trim();
+    const matchesSearch = !searchTerm || 
+                         initiative.initiativeTitle.toLowerCase().includes(searchLower) ||
+                         initiative.initiativeNumber.toLowerCase().includes(searchLower) ||
+                         initiative.site.toLowerCase().includes(searchLower) ||
+                         initiative.assignedUserEmail.toLowerCase().includes(searchLower) ||
+                         (initiative.description && initiative.description.toLowerCase().includes(searchLower));
+    
+    // Status filtering with exact match
+    const matchesStatus = filterStatus === 'ALL' || initiative.initiativeStatus === filterStatus;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Pagination logic for initiatives
+  const paginatedInitiatives = filteredInitiatives.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+  const totalPages = Math.ceil(filteredInitiatives.length / itemsPerPage);
+
+  // Fetch timeline entries for selected initiative
+  const { data: timelineEntries = [], isLoading: entriesLoading, refetch: refetchEntries } = useQuery({
+    queryKey: ['timeline-entries', selectedInitiativeId],
+    queryFn: async () => {
+      if (!selectedInitiativeId) return [];
+      const result = await timelineTrackerAPI.getTimelineEntries(selectedInitiativeId);
+      return result.data || [];
+    },
+    enabled: !!selectedInitiativeId,
+  });
+
+  // Fetch workflow transactions for selected initiative to check stage approval status
+  const { data: workflowTransactions = [] } = useQuery({
+    queryKey: ['workflow-transactions', selectedInitiativeId],
+    queryFn: async () => {
+      if (!selectedInitiativeId) return [];
+      const result = await workflowTransactionAPI.getTransactions(selectedInitiativeId);
+      return result || [];
+    },
+    enabled: !!selectedInitiativeId,
+  });
+
+  // Mutations for timeline operations
+  const createMutation = useMutation({
+    mutationFn: async (entry: TimelineEntry) => {
+      const result = await timelineTrackerAPI.createTimelineEntry(selectedInitiativeId!, {
+        ...entry,
+        enteredBy: user.email,
+        initiativeId: selectedInitiativeId,
+        // Don't send approval fields for new entries - backend will set defaults
+        siteLeadApproval: undefined,
+        initiativeLeadApproval: undefined
+      });
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timeline-entries'] });
+      toast({ title: "Success", description: "Timeline entry created successfully" });
+      setIsDialogOpen(false);
+      setFormData({});
+      refetchEntries();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to create timeline entry", 
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, entry }: { id: number; entry: TimelineEntry }) => {
+      // Don't send approval fields during regular updates to prevent overwriting
+      const updateData = {
+        stageName: entry.stageName,
+        plannedStartDate: entry.plannedStartDate,
+        plannedEndDate: entry.plannedEndDate,
+        actualStartDate: entry.actualStartDate,
+        actualEndDate: entry.actualEndDate,
+        status: entry.status,
+        responsiblePerson: entry.responsiblePerson,
+        remarks: entry.remarks,
+        documentPath: entry.documentPath,
+        updatedBy: user.email
+      };
+      
+      const result = await timelineTrackerAPI.updateTimelineEntry(id, updateData);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timeline-entries'] });
+      toast({ title: "Success", description: "Timeline entry updated successfully" });
+      setIsDialogOpen(false);
+      setEditingEntry(null);
+      setFormData({});
+      refetchEntries();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to update timeline entry", 
+        variant: "destructive" 
+      });
+    }
+  });
+
+  // REMOVED: approvalMutation - Approval logic removed for simplicity
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await timelineTrackerAPI.deleteTimelineEntry(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['timeline-entries'] });
+      toast({ title: "Success", description: "Timeline entry deleted successfully" });
+      refetchEntries();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to delete timeline entry", 
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const handleDownloadTemplate = async () => {
+    try {
+      toast({ 
+        title: "Download Starting", 
+        description: "Preparing your template file..." 
+      });
+
+      // Use the correct path with Vite base configuration
+      const templatePath = '/opexhub/templates/Timeline_sheet_template.xlsx';
+      
+      // Fetch the file as blob to handle binary data properly
+      const response = await fetch(templatePath);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch template: ${response.statusText}`);
+      }
+      
+      // Get the file as blob (binary data)
+      const blob = await response.blob();
+      
+      // Create a blob URL
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'Timeline_sheet_template.xlsx'; // Removed spaces for better compatibility
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(blobUrl);
+      
+      toast({ 
+        title: "Download Complete", 
+        description: "Timeline tracker template downloaded successfully!" 
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({ 
+        title: "Download Error", 
+        description: `Failed to download template file: ${error instanceof Error ? error.message : 'Unknown error'}`, 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'PENDING': return <Clock className="h-4 w-4 text-yellow-600" />;
+      case 'IN_PROGRESS': return <AlertCircle className="h-4 w-4 text-blue-600" />;
+      case 'COMPLETED': return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'DELAYED': return <AlertCircle className="h-4 w-4 text-red-600" />;
+      default: return <Clock className="h-4 w-4 text-gray-500" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'bg-yellow-500 hover:bg-yellow-600';
+      case 'IN_PROGRESS': return 'bg-blue-500 hover:bg-blue-600';
+      case 'COMPLETED': return 'bg-green-500 hover:bg-green-600';
+      case 'DELAYED': return 'bg-red-500 hover:bg-red-600';
+      default: return 'bg-gray-500 hover:bg-gray-600';
+    }
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'bg-yellow-500 text-white';
+      case 'IN_PROGRESS': return 'bg-blue-500 text-white';
+      case 'COMPLETED': return 'bg-green-500 text-white';
+      case 'DELAYED': return 'bg-red-500 text-white';
+      default: return 'bg-gray-500 text-white';
+    }
+  };
+
+  // Helper function to check if Stage 6 (Timeline Tracker) is approved
+  const isStage6Approved = () => {
+    const stage6Transaction = workflowTransactions.find((transaction: any) => transaction.stageNumber === 6);
+    return stage6Transaction && stage6Transaction.approveStatus === 'approved';
+  };
+
+  const calculateProgress = (entry: TimelineEntry) => {
+    if (entry.status === 'COMPLETED') return 100;
+    if (entry.status === 'PENDING') return 0;
+    
+    const plannedStart = new Date(entry.plannedStartDate);
+    const plannedEnd = new Date(entry.plannedEndDate);
+    const now = new Date();
+    
+    if (now < plannedStart) return 0;
+    if (now > plannedEnd) return 100;
+    
+    const totalDuration = plannedEnd.getTime() - plannedStart.getTime();
+    const elapsed = now.getTime() - plannedStart.getTime();
+    
+    return Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.stageName || !formData.plannedStartDate || !formData.plannedEndDate || 
+        !formData.actualStartDate || !formData.actualEndDate || !formData.remarks) {
+      toast({ title: "Error", description: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+
+    // Validate dates
+    if (new Date(formData.plannedEndDate!) < new Date(formData.plannedStartDate!)) {
+      toast({ title: "Error", description: "Planned end date must be after planned start date", variant: "destructive" });
+      return;
+    }
+
+    // Validate actual dates
+    if (new Date(formData.actualEndDate!) < new Date(formData.actualStartDate!)) {
+      toast({ title: "Error", description: "Actual end date must be after actual start date", variant: "destructive" });
+      return;
+    }
+
+    const entryData = {
+      ...formData,
+      // Always use current logged-in user as responsible person
+      responsiblePerson: user.fullName,
+      // Set default status to IN_PROGRESS for new entries or preserve existing status for updates
+      status: formData.status || 'IN_PROGRESS',
+      progressPercentage: formData.progressPercentage || 0,
+      // Set default approval values for backend compatibility
+      siteLeadApproval: editingEntry?.siteLeadApproval || 'N',
+      initiativeLeadApproval: editingEntry?.initiativeLeadApproval || 'N'
+    } as TimelineEntry;
+
+    if (editingEntry) {
+      updateMutation.mutate({ id: editingEntry.id!, entry: entryData });
+    } else {
+      createMutation.mutate(entryData);
+    }
+  };
+
+  // Role-based permission functions - Enhanced for assigned IL check with stage 6 restriction
+  const canEdit = (entry: TimelineEntry) => {
+    // Get selected initiative to check stage status FIRST
+    const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+    if (!selectedInitiative) return false;
+    
+    // PRIMARY CHECK: If stage 6 has been approved - NO ONE can edit (applies to ALL users)
+    if (isStage6Approved() || selectedInitiative.initiativeStatus === 'Completed') {
+      console.log('DEBUG - Timeline Tracker CUD Operations BLOCKED - Stage 6 approved or Initiative completed');
+      return false; // Stage 6 has been approved - READ ONLY for ALL users
+    }
+    
+    // SECONDARY CHECK: Role-based permissions (only after stage check passes)
+    if (user.role !== 'IL') return false;
+    
+    // For assigned initiatives tab, user can edit
+    if (activeTab === 'assigned') return true;
+    
+    // For all initiatives tab, check if user is assigned to this specific initiative
+    return selectedInitiative && selectedInitiative.assignedUserEmail === user.email;
+  };
+
+  const canDelete = (entry: TimelineEntry) => {
+    // Get selected initiative to check stage status FIRST
+    const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+    if (!selectedInitiative) return false;
+    
+    // PRIMARY CHECK: If stage 6 has been approved - NO ONE can delete (applies to ALL users)
+    if (isStage6Approved() || selectedInitiative.initiativeStatus === 'Completed') {
+      return false; // Stage 6 has been approved - READ ONLY for ALL users
+    }
+    
+    // SECONDARY CHECK: Role-based permissions (only after stage check passes)
+    if (user.role !== 'IL') return false;
+    
+    // For assigned initiatives tab, user can delete
+    if (activeTab === 'assigned') return true;
+    
+    // For all initiatives tab, check if user is assigned to this specific initiative
+    return selectedInitiative && selectedInitiative.assignedUserEmail === user.email;
+  };
+
+  const canCreate = () => {
+    // Get selected initiative to check stage status FIRST
+    const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+    if (!selectedInitiative) return false;
+    
+    // PRIMARY CHECK: If stage 6 has been approved - NO ONE can create (applies to ALL users)
+    if (isStage6Approved() || selectedInitiative.initiativeStatus === 'Completed') {
+      return false; // Stage 6 has been approved - READ ONLY for ALL users
+    }
+    
+    // SECONDARY CHECK: Role-based permissions (only after stage check passes)
+    if (user.role !== 'IL') return false;
+    
+    // For assigned initiatives tab, user can create
+    if (activeTab === 'assigned') return true;
+    
+    // For all initiatives tab, check if user is assigned to this specific initiative
+    return selectedInitiative && selectedInitiative.assignedUserEmail === user.email;
+  };
+
+  const handleEdit = (entry: TimelineEntry) => {
+    setEditingEntry(entry);
+    setFormData(entry);
+    setIsDialogOpen(true);
+  };
+
+  const DatePicker = ({ 
+    date, 
+    onDateChange, 
+    placeholder 
+  }: { 
+    date?: string; 
+    onDateChange: (date: string) => void; 
+    placeholder: string; 
+  }) => (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {date ? format(new Date(date), "PPP") : <span>{placeholder}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={date ? new Date(date) : undefined}
+          onSelect={(selectedDate) => selectedDate && onDateChange(selectedDate.toISOString().split('T')[0])}
+          initialFocus
+          className="p-3 pointer-events-auto"
+        />
+      </PopoverContent>
+    </Popover>
+  );
+
+  // Summary stats for consistent design
+  const overviewStats = [
+    {
+      title: "Total Entries",
+      value: timelineEntries.length.toString(),
+      change: "+15%",
+      trend: "up",
+      icon: FileText,
+      color: "text-blue-600",
+      description: `${timelineEntries.filter((e: TimelineEntry) => e.status === 'COMPLETED').length} completed`
+    },
+    {
+      title: "In Progress",
+      value: timelineEntries.filter((e: TimelineEntry) => e.status === 'IN_PROGRESS').length.toString(),
+      change: "+8%",
+      trend: "up",
+      icon: Activity,
+      color: "text-orange-600",
+      description: "Currently active"
+    },
+    {
+      title: "Completed",
+      value: timelineEntries.filter((e: TimelineEntry) => e.status === 'COMPLETED').length.toString(),
+      change: "+25%",
+      trend: "up",
+      icon: CheckCircle,
+      color: "text-green-600",
+      description: "Successfully finished"
+    },
+    {
+      title: "Progress Monitoring",
+      value: `${timelineEntries.length > 0 ? 
+        ((timelineEntries.filter((e: TimelineEntry) => e.status === 'COMPLETED').length / timelineEntries.length) * 100).toFixed(0) 
+        : 0}%`,
+      change: "+12%",
+      trend: "up",
+      icon: Target,
+      color: "text-purple-600",
+      description: "Stage 7 completion rate"
+    }
+  ];
+
+  if (isCurrentlyLoading) {
+    return (
+      <div className="container mx-auto p-4 space-y-4 max-w-6xl">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+            <p className="text-sm text-muted-foreground">Loading Timeline Tracker...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-4 space-y-4 max-w-6xl">
+      {/* Header - Match Dashboard style */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Initiative Timeline Tracker
+          </h1>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            {(() => {
+              if (selectedInitiativeId) {
+                const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+                if (selectedInitiative && (isStage6Approved() || selectedInitiative.initiativeStatus === 'Completed')) {
+                  return 'View initiative timelines and milestones';
+                }
+              }
+              return user.role === 'IL' 
+                ? 'Manage and track initiative timelines and milestones' 
+                : 'View initiative timelines and milestones';
+            })()}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Download Template Button */}
+          <Button 
+            variant="outline"
+            onClick={handleDownloadTemplate}
+            className="gap-2 shrink-0 hover:bg-green-50 hover:border-green-200 transition-colors h-9 px-4 text-xs"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+            <span className="font-medium">Download Template</span>
+          </Button>
+          
+          {selectedInitiativeId && canCreate() && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  onClick={() => { setEditingEntry(null); setFormData({}); }}
+                  className="gap-2 shrink-0 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 h-9 px-4 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Timeline Entry
+                </Button>
+              </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingEntry ? 'Edit Timeline Entry' : 'Add Timeline Entry'}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label htmlFor="stageName">Activity Name *</Label>
+                    <Input
+                      id="stageName"
+                      value={formData.stageName || ''}
+                      onChange={(e) => setFormData({ ...formData, stageName: e.target.value })}
+                      placeholder="Enter stage or activity name"
+                      className="focus:ring-2 focus:ring-gray-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="responsiblePerson">Responsible Person *</Label>
+                    <Input
+                      id="responsiblePerson"
+                      value={user.fullName}
+                      readOnly
+                      disabled
+                      className="focus:ring-2 focus:ring-gray-500 bg-gray-50 text-gray-700 cursor-not-allowed"
+                      placeholder="Current logged in user"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="status">Status (Default: In Progress)</Label>
+                    <Select 
+                      value={formData.status || 'IN_PROGRESS'} 
+                      onValueChange={(value) => setFormData({ ...formData, status: value as any })}
+                    >
+                      <SelectTrigger className="focus:ring-2 focus:ring-gray-500">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
+                        {/* <SelectItem value="PENDING">Pending</SelectItem>
+                        <SelectItem value="DELAYED">Delayed</SelectItem> */}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Planned Start Date *</Label>
+                    <DatePicker
+                      date={formData.plannedStartDate}
+                      onDateChange={(date) => setFormData({ ...formData, plannedStartDate: date })}
+                      placeholder="Select planned start date"
+                    />
+                  </div>
+                  <div>
+                    <Label>Planned End Date *</Label>
+                    <DatePicker
+                      date={formData.plannedEndDate}
+                      onDateChange={(date) => setFormData({ ...formData, plannedEndDate: date })}
+                      placeholder="Select planned end date"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Actual Start Date *</Label>
+                    <DatePicker
+                      date={formData.actualStartDate}
+                      onDateChange={(date) => setFormData({ ...formData, actualStartDate: date })}
+                      placeholder="Select actual start date"
+                    />
+                  </div>
+                  <div>
+                    <Label>Actual End Date *</Label>
+                    <DatePicker
+                      date={formData.actualEndDate}
+                      onDateChange={(date) => setFormData({ ...formData, actualEndDate: date })}
+                      placeholder="Select actual end date"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="remarks">Remarks & Notes *</Label>
+                  <Textarea
+                    id="remarks"
+                    value={formData.remarks || ''}
+                    onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                    placeholder="Enter any remarks, notes, or additional information"
+                    className="mt-2 min-h-[80px] border-[1px] border-border focus-visible:ring-1"
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={createMutation.isPending || updateMutation.isPending}
+                  >
+                    {createMutation.isPending || updateMutation.isPending ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : null}
+                    {editingEntry ? 'Update' : 'Create'} Entry
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+          )}
+        </div>
+      </div>
+
+      {/* Alert message when stage 6 is approved - Show for ALL users */}
+      {/* {selectedInitiativeId && (() => {
+        const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+        return selectedInitiative && ((selectedInitiative.stageNumber && selectedInitiative.stageNumber > 6) || 
+               selectedInitiative.initiativeStatus === 'Completed');
+      })() && (
+        <Alert className="mb-4 bg-amber-50 border-amber-200">
+          <Lock className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            <strong>Read-Only Access:</strong> This initiative has moved beyond stage 6 (Timeline Tracker) or has been completed. All timeline entries are now read-only and no modifications are allowed for any user.
+          </AlertDescription>
+        </Alert>
+      )} */}
+
+      {!selectedInitiativeId ? (
+        <div>
+          {/* Tabs for All vs Assigned Initiatives */}
+          <div className="mb-4">
+            <Tabs value={activeTab} onValueChange={(value: string) => {
+              setActiveTab(value as 'all' | 'assigned');
+              setCurrentPage(1); // Reset pagination when switching tabs
+            }} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 h-9">
+                <TabsTrigger value="all" className="flex items-center gap-1.5 text-xs">
+                  <FileText className="h-3.5 w-3.5" />
+                  All Initiatives
+                </TabsTrigger>
+                <TabsTrigger value="assigned" className="flex items-center gap-1.5 text-xs">
+                  <Target className="h-3.5 w-3.5" />
+                  Your Assigned Initiatives
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Filters - Enhanced style */}
+          <Card className="shadow-sm mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Filter className="h-4 w-4 text-blue-600" />
+                Initiative Filters
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {activeTab === 'assigned' 
+                  ? 'Search and filter initiatives assigned to you' 
+                  : `Search and filter all initiatives${user.site === 'CORP' ? ' (all sites)' : ` for ${user.site} site`}`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  <Input
+                    placeholder="Search by title, number, site, lead, or description..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      setSearchTerm(e.target.value);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.stopPropagation()}
+                    className="h-10 border-gray-200 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 transition-colors pl-10 pr-10"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSearchTerm('');
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Select value={filterStatus} onValueChange={(value) => {
+                    setFilterStatus(value);
+                  }}>
+                    <SelectTrigger className="sm:w-40 h-10 border-gray-200 focus:border-gray-500 focus:ring-1 focus:ring-gray-500">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent onClick={(e) => e.stopPropagation()}>
+                      <SelectItem value="ALL">All Status</SelectItem>
+                      <SelectItem value="In Progress">In Progress</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      {/* <SelectItem value="Planning">Planning</SelectItem> */}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {/* Results counter */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                <div className="text-sm text-muted-foreground">
+                  {filteredInitiatives.length === currentInitiatives.length ? (
+                    `Showing all ${currentInitiatives.length} initiatives`
+                  ) : (
+                    `Showing ${filteredInitiatives.length} of ${currentInitiatives.length} initiatives`
+                  )}
+                  {searchTerm && (
+                    <span className="ml-2 text-blue-600">
+                      matching "{searchTerm}"
+                    </span>
+                  )}
+                  {filterStatus !== 'ALL' && (
+                    <span className="ml-2 text-green-600">
+                      with status "{filterStatus}"
+                    </span>
+                  )}
+                </div>
+                {(searchTerm || filterStatus !== 'ALL') && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchTerm('');
+                      setFilterStatus('ALL');
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {filteredInitiatives.length === 0 ? (
+            <Card className="shadow-sm">
+              <CardContent className="text-center py-12">
+                {currentInitiatives.length === 0 ? (
+                  <>
+                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">
+                      {activeTab === 'assigned' ? 'No Assigned Initiatives' : 'No Initiatives Available'}
+                    </h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                      {activeTab === 'assigned' 
+                        ? 'You currently have no initiatives assigned to you as Initiative Lead where Timeline Tracker is available.'
+                        : 'You currently have no initiatives where Stage 6 (Timeline Tracker) has been approved.'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Matching Initiatives</h3>
+                    <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
+                      No initiatives found matching your current search criteria.
+                    </p>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      {searchTerm && (
+                        <p>• Try different search terms or check spelling</p>
+                      )}
+                      {filterStatus !== 'ALL' && (
+                        <p>• Try changing the status filter</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSearchTerm('');
+                        setFilterStatus('ALL');
+                      }}
+                      className="mt-4"
+                    >
+                      Clear All Filters
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+                {paginatedInitiatives.map((initiative: Initiative) => (
+                  <Card
+                    key={initiative.id}
+                    className="timeline-card cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02] shadow-sm group relative"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedInitiativeId(initiative.id);
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-transparent to-gray-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none"></div>
+                    <CardHeader 
+                      className="pb-3 relative z-10"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedInitiativeId(initiative.id);
+                      }}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle 
+                            className="text-sm font-semibold line-clamp-1 mb-2 pointer-events-none"
+                          >
+                            {initiative.initiativeNumber}
+                          </CardTitle>
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs pointer-events-none ${
+                              initiative.initiativeStatus === 'Completed' 
+                                ? 'bg-green-50 text-green-700 border-green-200' 
+                                : initiative.initiativeStatus === 'In Progress'
+                                ? 'bg-gray-50 text-gray-700 border-gray-200'
+                                : initiative.initiativeStatus === 'Planning'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                : 'bg-gray-50 text-gray-700 border-gray-200'
+                            }`}
+                          >
+                            {initiative.initiativeStatus}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent 
+                      className="pt-0 relative z-10"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedInitiativeId(initiative.id);
+                      }}
+                    >
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-3 pointer-events-none">
+                        {initiative.initiativeTitle}
+                      </p>
+                      <div className="space-y-2 text-xs pointer-events-none">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Site:</span>
+                          <span className="font-medium">{initiative.site}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Lead:</span>
+                          <span className="font-medium truncate ml-2 text-xs">{initiative.assignedUserEmail}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Savings:</span>
+                          <span className="font-medium text-green-600">{formatCurrency(initiative.expectedSavings)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex justify-center items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentPage(prev => Math.max(prev - 1, 1));
+                    }}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="flex items-center px-3 text-sm pointer-events-none">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCurrentPage(prev => Math.min(prev + 1, totalPages));
+                    }}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">
+                Timeline for: {currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId)?.initiativeNumber}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId)?.initiativeTitle}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSelectedInitiativeId(null)}>
+              Back to Initiatives
+            </Button>
+          </div>
+
+          {/* Role-based access info - Enhanced for assigned IL check and stage 6 restriction */}
+          {/* {!canCreate() && (
+            <Alert className="mb-6 border-blue-200 bg-blue-50">
+              <Lock className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <strong>Read-Only Access:</strong> You can view timeline entries but cannot create, edit, or delete entries. 
+                {(() => {
+                  const selectedInitiative = currentInitiatives.find((i: Initiative) => i.id === selectedInitiativeId);
+                  if (selectedInitiative && ((selectedInitiative.stageNumber && selectedInitiative.stageNumber > 6) || 
+                      selectedInitiative.initiativeStatus === 'Completed')) {
+                    // return 'This initiative has moved beyond stage 6 (Timeline Tracker) or has been completed and is now read-only for all users.';
+                  }
+                  return user.role !== 'IL' 
+                    ? 'Only users with Initiative Lead (IL) role can modify timeline data.'
+                    : 'Only the assigned Initiative Lead for this specific initiative can modify timeline data.';
+                })()}
+              </AlertDescription>
+            </Alert>
+          )} */}
+
+          {/* Summary Stats Cards - Dashboard pattern */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            {overviewStats.map((stat) => (
+              <Card key={stat.title} className="relative overflow-hidden group hover:shadow-md transition-all duration-200 shadow-sm">
+                <div className="absolute inset-0 bg-gradient-to-br from-transparent to-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10 pt-3 px-3">
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-1.5 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200`}>
+                    <stat.icon className={`h-3.5 w-3.5 ${stat.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent className="pb-3 relative z-10 px-3">
+                  <div className="text-xl font-bold break-words mb-1">
+                    {stat.value}
+                  </div>
+                  <p className="text-2xs text-muted-foreground mb-1">
+                    {stat.description}
+                  </p>
+                  <p className={`text-2xs flex items-center gap-1 ${
+                    stat.trend === 'up' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    <TrendingUp className="h-2.5 w-2.5" />
+                    {stat.change} from last month
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Tab Navigation - Match Dashboard style */}
+          <Tabs defaultValue="timeline" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2 h-9">
+              <TabsTrigger value="timeline" className="flex items-center gap-1.5 text-xs">
+                <FileText className="h-3.5 w-3.5" />
+                Timeline Entries
+              </TabsTrigger>
+              <TabsTrigger value="overview" className="flex items-center gap-1.5 text-xs">
+                <BarChart3 className="h-3.5 w-3.5" />
+                Overview
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="timeline" className="mt-4">
+              {entriesLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="text-center space-y-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+                    <p className="text-sm text-muted-foreground">Loading timeline entries...</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {timelineEntries.length === 0 ? (
+                    <Card className="shadow-sm">
+                      <CardContent className="text-center py-12">
+                        <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No Timeline Entries</h3>
+                        <p className="text-muted-foreground text-sm">No timeline entries found for this initiative.</p>
+                        {user.role === 'IL' && (
+                          <p className="text-sm text-muted-foreground mt-2">Click "Add Timeline Entry" to get started.</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="space-y-3">
+                      {timelineEntries.map((entry: TimelineEntry) => (
+                        <Card key={entry.id} className="hover:shadow-md transition-shadow shadow-sm border-l-4" 
+                              style={{ borderLeftColor: 
+                                entry.status === 'COMPLETED' ? '#10b981' :
+                                entry.status === 'IN_PROGRESS' ? '#3b82f6' :
+                                entry.status === 'DELAYED' ? '#ef4444' : '#f59e0b'
+                              }}>
+                          <CardContent className="p-4">
+                            {/* Header Row */}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                {getStatusIcon(entry.status)}
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-sm font-semibold truncate" title={entry.stageName}>
+                                    {entry.stageName}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {entry.responsiblePerson}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2 flex-shrink-0">
+                                <Badge 
+                                  variant="outline"
+                                  className={`text-xs px-2 py-1 font-medium ${
+                                    entry.status === 'COMPLETED' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    entry.status === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    entry.status === 'DELAYED' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                  }`}
+                                >
+                                  {entry.status === 'COMPLETED' ? 'Completed' :
+                                   entry.status === 'IN_PROGRESS' ? 'In Progress' :
+                                   entry.status === 'DELAYED' ? 'Delayed' : 'Pending'}
+                                </Badge>
+                                <div className="flex space-x-1">
+                                  {canEdit(entry) && (
+                                    <Button size="sm" variant="ghost" onClick={() => handleEdit(entry)} className="h-7 w-7 p-0">
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  {canDelete(entry) && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => deleteMutation.mutate(entry.id!)}
+                                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Duration and Progress */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                              <div className="space-y-1">
+                                <p className="text-xs font-medium text-muted-foreground">Planned Duration</p>
+                                <p className="text-xs">
+                                  {format(new Date(entry.plannedStartDate), 'MMM dd')} - {format(new Date(entry.plannedEndDate), 'MMM dd, yyyy')}
+                                </p>
+                              </div>
+                              {entry.actualStartDate && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-medium text-muted-foreground">Actual Duration</p>
+                                  <p className="text-xs">
+                                    {format(new Date(entry.actualStartDate), 'MMM dd')}
+                                    {entry.actualEndDate && ` - ${format(new Date(entry.actualEndDate), 'MMM dd, yyyy')}`}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Compact Progress Bar - Commented out for future use */}
+                            {/* <div className="mb-3">
+                              <div className="flex justify-between items-center text-xs mb-1">
+                                <span className="font-medium">Progress</span>
+                                <span className="text-muted-foreground">{calculateProgress(entry)}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                                    entry.status === 'COMPLETED' ? 'bg-green-500' :
+                                    entry.status === 'IN_PROGRESS' ? 'bg-blue-500' :
+                                    entry.status === 'DELAYED' ? 'bg-red-500' : 'bg-yellow-500'
+                                  }`}
+                                  style={{ width: `${calculateProgress(entry)}%` }}
+                                ></div>
+                              </div>
+                            </div> */}
+
+                            {/* Remarks - Compact */}
+                            {entry.remarks && (
+                              <div className="mb-3 p-2 bg-gray-50 rounded text-xs">
+                                <span className="font-medium text-muted-foreground">Remarks: </span>
+                                <span className="text-muted-foreground">{entry.remarks}</span>
+                              </div>
+                            )}
+
+                            {/* REMOVED: Approval Status section - approval logic removed for simplicity */}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="overview" className="mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="shadow-sm">
+                  <CardContent className="p-6 text-center">
+                    <FileText className="h-8 w-8 mx-auto text-blue-600 mb-3" />
+                    <h3 className="text-2xl font-bold text-blue-600">{timelineEntries.length}</h3>
+                    <p className="text-sm text-muted-foreground">Total Entries</p>
+                  </CardContent>
+                </Card>
+                <Card className="shadow-sm">
+                  <CardContent className="p-6 text-center">
+                    <CheckCircle className="h-8 w-8 mx-auto text-green-600 mb-3" />
+                    <h3 className="text-2xl font-bold text-green-600">
+                      {timelineEntries.filter((e: TimelineEntry) => e.status === 'COMPLETED').length}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Completed</p>
+                  </CardContent>
+                </Card>
+                <Card className="shadow-sm">
+                  <CardContent className="p-6 text-center">
+                    <Clock className="h-8 w-8 mx-auto text-yellow-600 mb-3" />
+                    <h3 className="text-2xl font-bold text-yellow-600">
+                      {timelineEntries.filter((e: TimelineEntry) => e.status === 'IN_PROGRESS').length}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">In Progress</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
+    </div>
+  );
+}
