@@ -39,11 +39,12 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { sites, disciplines, User } from "@/lib/mockData";
+import { sites, User } from "@/lib/mockData";
 import { useCreateInitiative } from "@/hooks/useInitiatives";
 import { useHodBySite } from "@/hooks/useUsers";
 import GlassmorphLoader from "@/components/ui/GlassmorphLoader";
 import { fileAPI } from "@/lib/api";
+import { useDisciplines } from "@/hooks/useDisciplines";
 
 interface InitiativeFormProps {
   user: User;
@@ -84,6 +85,9 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
   
   // Get HODs for the user's site
   const { data: hodUsers = [], isLoading: hodLoading } = useHodBySite(user.site || "");
+  
+  // Get disciplines from API
+  const { data: disciplines = [], isLoading: disciplinesLoading } = useDisciplines();
   
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -440,10 +444,14 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs font-medium">Discipline *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting || disciplinesLoading}>
                             <FormControl>
                               <SelectTrigger className="h-9 text-xs" style={{ fontSize: '13px' }}>
-                                <SelectValue placeholder="Select discipline" />
+                                <SelectValue placeholder={
+                                  disciplinesLoading ? "Loading disciplines..." : 
+                                  disciplines.length === 0 ? "No disciplines available" :
+                                  "Select discipline"
+                                } />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -462,6 +470,11 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
                             </SelectContent>
                           </Select>
                           <FormMessage className="text-xs" />
+                          {disciplines.length === 0 && !disciplinesLoading && (
+                            <p className="text-xs text-red-600 mt-1">
+                              No disciplines found. Please contact administrator.
+                            </p>
+                          )}
                         </FormItem>
                       )}
                     />

@@ -971,6 +971,44 @@ export const reportsAPI = {
   }
 };
 
+// Discipline API
+export const disciplineAPI = {
+  getAll: async () => {
+    const response = await api.get('/disciplines');
+    return response.data;
+  },
+  
+  getAllIncludingInactive: async () => {
+    const response = await api.get('/disciplines/all');
+    return response.data;
+  },
+  
+  getById: async (id: number) => {
+    const response = await api.get(`/disciplines/${id}`);
+    return response.data;
+  },
+  
+  create: async (disciplineData: any) => {
+    const response = await api.post('/disciplines', disciplineData);
+    return response.data;
+  },
+  
+  update: async (id: number, disciplineData: any) => {
+    const response = await api.put(`/disciplines/${id}`, disciplineData);
+    return response.data;
+  },
+  
+  deactivate: async (id: number) => {
+    const response = await api.patch(`/disciplines/${id}/deactivate`);
+    return response.data;
+  },
+  
+  delete: async (id: number) => {
+    const response = await api.delete(`/disciplines/${id}`);
+    return response.data;
+  }
+};
+
 // File Upload API
 export const fileAPI = {
   uploadFiles: async (initiativeId: number, files: File[]) => {
