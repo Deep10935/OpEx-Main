@@ -75,14 +75,15 @@ public class DashboardService {
         String prevEndMonth = prevMonthRange[1];
         
         // Total Initiatives for the financial year or all years
+        // Filter by initiative execution period (startDate/endDate) overlapping with FY
         Long totalInitiatives;
         Long previousTotalInitiatives;
         if (isAllYears) {
             totalInitiatives = initiativeRepository.count();
-            previousTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
+            previousTotalInitiatives = initiativeRepository.countByFinancialYear(prevFyStart, prevFyEnd);
         } else {
-            totalInitiatives = initiativeRepository.countByCreatedAtBetween(fyStart, fyEnd);
-            previousTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
+            totalInitiatives = initiativeRepository.countByFinancialYear(fyStart, fyEnd);
+            previousTotalInitiatives = initiativeRepository.countByFinancialYear(prevFyStart, prevFyEnd);
         }
 
         // Actual Savings for the financial year or all years
@@ -97,14 +98,15 @@ public class DashboardService {
         }
 
         // Completed Initiatives for the financial year or all years
+        // Filter by initiative execution period (startDate/endDate) overlapping with FY
         Long completedInitiatives;
         Long previousCompletedInitiatives;
         if (isAllYears) {
             completedInitiatives = initiativeRepository.countByStatus("Completed");
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", prevFyStart, prevFyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndFinancialYear("Completed", prevFyStart, prevFyEnd);
         } else {
-            completedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", fyStart, fyEnd);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", prevFyStart, prevFyEnd);
+            completedInitiatives = initiativeRepository.countByStatusAndFinancialYear("Completed", fyStart, fyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndFinancialYear("Completed", prevFyStart, prevFyEnd);
         }
 
         // Pending Approvals for the financial year or all years
@@ -141,6 +143,7 @@ public class DashboardService {
 
     /**
      * Get recent initiatives (latest 5) for a specific financial year
+     * Filter by initiative execution period (startDate/endDate) overlapping with FY
      */
     public List<RecentInitiativeDTO> getRecentInitiatives(String financialYear) {
         Pageable pageable = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -148,7 +151,7 @@ public class DashboardService {
 
         if (financialYear != null && !financialYear.isEmpty()) {
             LocalDateTime[] fyRange = getFinancialYearRange(financialYear);
-            recentInitiatives = initiativeRepository.findByCreatedAtBetween(fyRange[0], fyRange[1], pageable).getContent();
+            recentInitiatives = initiativeRepository.findByFinancialYearOrderByCreatedAtDesc(fyRange[0], fyRange[1], pageable).getContent();
         } else {
             recentInitiatives = initiativeRepository.findAll(pageable).getContent();
         }
@@ -167,6 +170,7 @@ public class DashboardService {
 
     /**
      * Get recent initiatives for a specific site and financial year
+     * Filter by initiative execution period (startDate/endDate) overlapping with FY
      */
     public List<RecentInitiativeDTO> getRecentInitiativesBySite(String site, String financialYear) {
         Pageable pageable = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -174,7 +178,7 @@ public class DashboardService {
 
         if (financialYear != null && !financialYear.isEmpty()) {
             LocalDateTime[] fyRange = getFinancialYearRange(financialYear);
-            recentInitiatives = initiativeRepository.findBySiteAndCreatedAtBetween(site, fyRange[0], fyRange[1], pageable).getContent();
+            recentInitiatives = initiativeRepository.findBySiteAndFinancialYearOrderByCreatedAtDesc(site, fyRange[0], fyRange[1], pageable).getContent();
         } else {
             recentInitiatives = initiativeRepository.findBySite(site, pageable).getContent();
         }
@@ -225,14 +229,15 @@ public class DashboardService {
         String prevEndMonth = prevMonthRange[1];
         
         // Total Initiatives for site and financial year or all years
+        // Filter by initiative execution period (startDate/endDate) overlapping with FY
         Long totalInitiatives;
         Long previousTotalInitiatives;
         if (isAllYears) {
             totalInitiatives = initiativeRepository.countBySite(site);
-            previousTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            previousTotalInitiatives = initiativeRepository.countBySiteAndFinancialYear(site, prevFyStart, prevFyEnd);
         } else {
-            totalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
-            previousTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            totalInitiatives = initiativeRepository.countBySiteAndFinancialYear(site, fyStart, fyEnd);
+            previousTotalInitiatives = initiativeRepository.countBySiteAndFinancialYear(site, prevFyStart, prevFyEnd);
         }
 
         // Actual Savings for site and financial year or all years
@@ -247,14 +252,15 @@ public class DashboardService {
         }
 
         // Completed Initiatives for site and financial year or all years
+        // Filter by initiative execution period (startDate/endDate) overlapping with FY
         Long completedInitiatives;
         Long previousCompletedInitiatives;
         if (isAllYears) {
             completedInitiatives = initiativeRepository.countByStatusAndSite("Completed", site);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, prevFyStart, prevFyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndFinancialYear("Completed", site, prevFyStart, prevFyEnd);
         } else {
-            completedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, fyStart, fyEnd);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, prevFyStart, prevFyEnd);
+            completedInitiatives = initiativeRepository.countByStatusAndSiteAndFinancialYear("Completed", site, fyStart, fyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndFinancialYear("Completed", site, prevFyStart, prevFyEnd);
         }
 
         // Pending Approvals for site and financial year or all years
@@ -439,8 +445,8 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValues();
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValues();
             } else {
-                // Overall metrics - current FY (count ALL initiatives created in FY, regardless of status)
-                totalInitiatives = initiativeRepository.countByCreatedAtBetween(fyStart, fyEnd);
+                // Overall metrics - current FY (count ALL initiatives with execution period in FY, regardless of status)
+                totalInitiatives = initiativeRepository.countByFinancialYear(fyStart, fyEnd);
                 BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(fyStart, fyEnd);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
                 potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(fyStart, fyEnd);
@@ -449,7 +455,7 @@ public class DashboardService {
             }
             
             // Overall metrics - previous FY
-            prevTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
+            prevTotalInitiatives = initiativeRepository.countByFinancialYear(prevFyStart, prevFyEnd);
             BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(prevFyStart, prevFyEnd);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
@@ -465,7 +471,9 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValuesByBudgetType(budgetType);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValuesByBudgetType(budgetType);
             } else {
-                // Budget type specific metrics - current FY (count ALL initiatives created in FY with budget type, regardless of status)
+                // Budget type specific metrics - current FY (count ALL initiatives with execution period in FY and budget type, regardless of status)
+                // Note: Currently no repository method exists for budget type + FY overlap filtering
+                // Using createdAt for now - this would need a new repository method for complete accuracy
                 totalInitiatives = initiativeRepository.countByBudgetTypeAndCreatedAtBetween(budgetType, fyStart, fyEnd);
                 BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetweenAndBudgetType(fyStart, fyEnd, budgetType);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
@@ -651,8 +659,8 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValuesBySite(site);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValuesBySite(site);
             } else {
-                // Overall metrics for site - current FY (count ALL initiatives created in FY for site, regardless of status)
-                totalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
+                // Overall metrics for site - current FY (count ALL initiatives with execution period in FY for site, regardless of status)
+                totalInitiatives = initiativeRepository.countBySiteAndFinancialYear(site, fyStart, fyEnd);
                 BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
                 potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
@@ -661,7 +669,7 @@ public class DashboardService {
             }
             
             // Overall metrics for site - previous FY
-            prevTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            prevTotalInitiatives = initiativeRepository.countBySiteAndFinancialYear(site, prevFyStart, prevFyEnd);
             BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
