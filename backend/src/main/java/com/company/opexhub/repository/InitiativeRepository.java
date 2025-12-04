@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -198,4 +199,40 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
     
     @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.initiativeNumber LIKE %:initiativeNumber% AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
+    
+    // ============================================================================
+    // NEW: FY-based queries using startDate instead of createdAt
+    // ============================================================================
+    
+    // Count queries based on startDate for FY filtering
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countByStartDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countBySiteAndStartDateBetween(@Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.status = :status AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countByStatusAndStartDateBetween(@Param("status") String status, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countByStatusAndSiteAndStartDateBetween(@Param("status") String status, @Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE LOWER(COALESCE(i.budgetType, 'budgeted')) = :budgetType AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countByBudgetTypeAndStartDateBetween(@Param("budgetType") String budgetType, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND LOWER(COALESCE(i.budgetType, 'budgeted')) = :budgetType AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Long countBySiteAndBudgetTypeAndStartDateBetween(@Param("site") String site, @Param("budgetType") String budgetType, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    // Sum queries based on startDate for FY filtering
+    @Query("SELECT SUM(i.expectedSavings) FROM Initiative i WHERE i.startDate >= :startDate AND i.startDate <= :endDate AND i.status NOT IN ('Rejected', 'Dropped')")
+    java.math.BigDecimal sumExpectedSavingsByStartDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT SUM(i.expectedSavings) FROM Initiative i WHERE i.startDate >= :startDate AND i.startDate <= :endDate AND LOWER(COALESCE(i.budgetType, 'budgeted')) = :budgetType AND i.status NOT IN ('Rejected', 'Dropped')")
+    java.math.BigDecimal sumExpectedSavingsByStartDateBetweenAndBudgetType(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, @Param("budgetType") String budgetType);
+    
+    @Query("SELECT SUM(i.expectedSavings) FROM Initiative i WHERE i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate AND i.status NOT IN ('Rejected', 'Dropped')")
+    java.math.BigDecimal sumExpectedSavingsBySiteAndStartDateBetween(@Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+    
+    @Query("SELECT SUM(i.expectedSavings) FROM Initiative i WHERE i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate AND LOWER(COALESCE(i.budgetType, 'budgeted')) = :budgetType AND i.status NOT IN ('Rejected', 'Dropped')")
+    java.math.BigDecimal sumExpectedSavingsBySiteAndStartDateBetweenAndBudgetType(@Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, @Param("budgetType") String budgetType);
 }

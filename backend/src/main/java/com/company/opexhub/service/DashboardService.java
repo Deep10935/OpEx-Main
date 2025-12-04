@@ -44,45 +44,54 @@ public class DashboardService {
     /**
      * Get dashboard statistics for a specific financial year or all years
      */
+    /**
+     * Get dashboard statistics for a specific financial year or all years
+     * UPDATED: Now uses startDate for FY filtering instead of createdAt
+     */
     public DashboardStatsDTO getDashboardStats(String financialYear) {
         LocalDateTime[] fyRange;
+        LocalDate[] fyDateRange;
         String[] monthRange;
-        LocalDateTime[] prevFyRange;
+        LocalDate[] prevFyDateRange;
         String[] prevMonthRange;
         boolean isAllYears = (financialYear == null || financialYear.isEmpty() || "all".equals(financialYear));
 
         if (!isAllYears) {
             // Use specified financial year
             fyRange = getFinancialYearRange(financialYear);
+            fyDateRange = getFinancialYearDateRange(financialYear);
             monthRange = getFinancialYearMonthRange(financialYear);
-            prevFyRange = getPreviousFinancialYearRange(financialYear);
+            prevFyDateRange = getPreviousFinancialYearDateRange(financialYear);
             prevMonthRange = getPreviousFinancialYearMonthRange(financialYear);
         } else {
             // Use current financial year for comparison (when showing all years)
             fyRange = getFinancialYearRange();
+            fyDateRange = getFinancialYearDateRange();
             monthRange = getFinancialYearMonthRange();
-            prevFyRange = getPreviousFinancialYearRange();
+            prevFyDateRange = getPreviousFinancialYearDateRange();
             prevMonthRange = getPreviousFinancialYearMonthRange();
         }
 
         LocalDateTime fyStart = fyRange[0];
         LocalDateTime fyEnd = fyRange[1];
+        LocalDate fyStartDate = fyDateRange[0];
+        LocalDate fyEndDate = fyDateRange[1];
         String startMonth = monthRange[0];
         String endMonth = monthRange[1];
-        LocalDateTime prevFyStart = prevFyRange[0];
-        LocalDateTime prevFyEnd = prevFyRange[1];
+        LocalDate prevFyStartDate = prevFyDateRange[0];
+        LocalDate prevFyEndDate = prevFyDateRange[1];
         String prevStartMonth = prevMonthRange[0];
         String prevEndMonth = prevMonthRange[1];
         
-        // Total Initiatives for the financial year or all years
+        // Total Initiatives for the financial year or all years (USING startDate)
         Long totalInitiatives;
         Long previousTotalInitiatives;
         if (isAllYears) {
             totalInitiatives = initiativeRepository.count();
-            previousTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
+            previousTotalInitiatives = initiativeRepository.countByStartDateBetween(prevFyStartDate, prevFyEndDate);
         } else {
-            totalInitiatives = initiativeRepository.countByCreatedAtBetween(fyStart, fyEnd);
-            previousTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
+            totalInitiatives = initiativeRepository.countByStartDateBetween(fyStartDate, fyEndDate);
+            previousTotalInitiatives = initiativeRepository.countByStartDateBetween(prevFyStartDate, prevFyEndDate);
         }
 
         // Actual Savings for the financial year or all years
@@ -96,26 +105,26 @@ public class DashboardService {
             previousActualSavings = monthlyMonitoringEntryRepository.sumAchievedValueByMonitoringMonthBetween(prevStartMonth, prevEndMonth);
         }
 
-        // Completed Initiatives for the financial year or all years
+        // Completed Initiatives for the financial year or all years (USING startDate)
         Long completedInitiatives;
         Long previousCompletedInitiatives;
         if (isAllYears) {
             completedInitiatives = initiativeRepository.countByStatus("Completed");
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", prevFyStart, prevFyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndStartDateBetween("Completed", prevFyStartDate, prevFyEndDate);
         } else {
-            completedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", fyStart, fyEnd);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndCreatedAtBetween("Completed", prevFyStart, prevFyEnd);
+            completedInitiatives = initiativeRepository.countByStatusAndStartDateBetween("Completed", fyStartDate, fyEndDate);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndStartDateBetween("Completed", prevFyStartDate, prevFyEndDate);
         }
 
-        // Pending Approvals for the financial year or all years
+        // Pending Approvals for the financial year or all years (keeping createdAt for workflow transactions)
         Long pendingApprovals;
         Long previousPendingApprovals;
         if (isAllYears) {
             pendingApprovals = workflowTransactionRepository.countByApproveStatusAndPendingWithIsNotNull("pending");
-            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStart, prevFyEnd, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(fyStart, prevFyEndDate.atTime(23, 59, 59), "pending");
         } else {
             pendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(fyStart, fyEnd, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStart, prevFyEnd, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
         }
 
         // Ensure non-null values
@@ -193,46 +202,52 @@ public class DashboardService {
 
     /**
      * Get dashboard statistics for a specific site and financial year or all years
+     * UPDATED: Now uses startDate for FY filtering instead of createdAt
      */
     public DashboardStatsDTO getDashboardStatsBySite(String site, String financialYear) {
         LocalDateTime[] fyRange;
+        LocalDate[] fyDateRange;
         String[] monthRange;
-        LocalDateTime[] prevFyRange;
+        LocalDate[] prevFyDateRange;
         String[] prevMonthRange;
         boolean isAllYears = (financialYear == null || financialYear.isEmpty() || "all".equals(financialYear));
 
         if (!isAllYears) {
             // Use specified financial year
             fyRange = getFinancialYearRange(financialYear);
+            fyDateRange = getFinancialYearDateRange(financialYear);
             monthRange = getFinancialYearMonthRange(financialYear);
-            prevFyRange = getPreviousFinancialYearRange(financialYear);
+            prevFyDateRange = getPreviousFinancialYearDateRange(financialYear);
             prevMonthRange = getPreviousFinancialYearMonthRange(financialYear);
         } else {
             // Use current financial year for comparison (when showing all years)
             fyRange = getFinancialYearRange();
+            fyDateRange = getFinancialYearDateRange();
             monthRange = getFinancialYearMonthRange();
-            prevFyRange = getPreviousFinancialYearRange();
+            prevFyDateRange = getPreviousFinancialYearDateRange();
             prevMonthRange = getPreviousFinancialYearMonthRange();
         }
 
         LocalDateTime fyStart = fyRange[0];
         LocalDateTime fyEnd = fyRange[1];
+        LocalDate fyStartDate = fyDateRange[0];
+        LocalDate fyEndDate = fyDateRange[1];
         String startMonth = monthRange[0];
         String endMonth = monthRange[1];
-        LocalDateTime prevFyStart = prevFyRange[0];
-        LocalDateTime prevFyEnd = prevFyRange[1];
+        LocalDate prevFyStartDate = prevFyDateRange[0];
+        LocalDate prevFyEndDate = prevFyDateRange[1];
         String prevStartMonth = prevMonthRange[0];
         String prevEndMonth = prevMonthRange[1];
         
-        // Total Initiatives for site and financial year or all years
+        // Total Initiatives for site and financial year or all years (USING startDate)
         Long totalInitiatives;
         Long previousTotalInitiatives;
         if (isAllYears) {
             totalInitiatives = initiativeRepository.countBySite(site);
-            previousTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            previousTotalInitiatives = initiativeRepository.countBySiteAndStartDateBetween(site, prevFyStartDate, prevFyEndDate);
         } else {
-            totalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
-            previousTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            totalInitiatives = initiativeRepository.countBySiteAndStartDateBetween(site, fyStartDate, fyEndDate);
+            previousTotalInitiatives = initiativeRepository.countBySiteAndStartDateBetween(site, prevFyStartDate, prevFyEndDate);
         }
 
         // Actual Savings for site and financial year or all years
@@ -246,26 +261,26 @@ public class DashboardService {
             previousActualSavings = monthlyMonitoringEntryRepository.sumAchievedValueBySiteAndMonitoringMonthBetween(site, prevStartMonth, prevEndMonth);
         }
 
-        // Completed Initiatives for site and financial year or all years
+        // Completed Initiatives for site and financial year or all years (USING startDate)
         Long completedInitiatives;
         Long previousCompletedInitiatives;
         if (isAllYears) {
             completedInitiatives = initiativeRepository.countByStatusAndSite("Completed", site);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, prevFyStart, prevFyEnd);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndStartDateBetween("Completed", site, prevFyStartDate, prevFyEndDate);
         } else {
-            completedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, fyStart, fyEnd);
-            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndCreatedAtBetween("Completed", site, prevFyStart, prevFyEnd);
+            completedInitiatives = initiativeRepository.countByStatusAndSiteAndStartDateBetween("Completed", site, fyStartDate, fyEndDate);
+            previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndStartDateBetween("Completed", site, prevFyStartDate, prevFyEndDate);
         }
 
-        // Pending Approvals for site and financial year or all years
+        // Pending Approvals for site and financial year or all years (keeping createdAt for workflow transactions)
         Long pendingApprovals;
         Long previousPendingApprovals;
         if (isAllYears) {
             pendingApprovals = workflowTransactionRepository.countBySiteAndApproveStatusAndPendingWithIsNotNull(site, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStart, prevFyEnd, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
         } else {
             pendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, fyStart, fyEnd, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStart, prevFyEnd, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
         }
 
         // Ensure non-null values
@@ -403,15 +418,20 @@ public class DashboardService {
     
     /**
      * Calculate performance metrics for a specific budget type
+     * UPDATED: Now uses startDate for FY filtering instead of createdAt
      */
     private PerformanceAnalysisDTO.PerformanceMetrics calculatePerformanceMetrics(
             String budgetType, LocalDateTime fyStart, LocalDateTime fyEnd, 
             String startMonth, String endMonth, boolean isAllYears) {
         
+        // Convert LocalDateTime to LocalDate for startDate filtering
+        LocalDate fyStartDate = fyStart.toLocalDate();
+        LocalDate fyEndDate = fyEnd.toLocalDate();
+        
         // Get previous financial year data for trend calculation
-        LocalDateTime[] prevFyRange = getPreviousFinancialYearRange();
-        LocalDateTime prevFyStart = prevFyRange[0];
-        LocalDateTime prevFyEnd = prevFyRange[1];
+        LocalDate[] prevFyDateRange = getPreviousFinancialYearDateRange();
+        LocalDate prevFyStartDate = prevFyDateRange[0];
+        LocalDate prevFyEndDate = prevFyDateRange[1];
         String[] prevMonthRange = getPreviousFinancialYearMonthRange();
         String prevStartMonth = prevMonthRange[0];
         String prevEndMonth = prevMonthRange[1];
@@ -439,18 +459,18 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValues();
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValues();
             } else {
-                // Overall metrics - current FY (count ALL initiatives created in FY, regardless of status)
-                totalInitiatives = initiativeRepository.countByCreatedAtBetween(fyStart, fyEnd);
-                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(fyStart, fyEnd);
+                // Overall metrics - current FY (count ALL initiatives by startDate in FY, regardless of status)
+                totalInitiatives = initiativeRepository.countByStartDateBetween(fyStartDate, fyEndDate);
+                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByStartDateBetween(fyStartDate, fyEndDate);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
-                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(fyStart, fyEnd);
+                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsByStartDateBetween(fyStartDate, fyEndDate);
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueByMonitoringMonthBetween(startMonth, endMonth);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumTargetValueByMonitoringMonthBetween(startMonth, endMonth);
             }
             
             // Overall metrics - previous FY
-            prevTotalInitiatives = initiativeRepository.countByCreatedAtBetween(prevFyStart, prevFyEnd);
-            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetween(prevFyStart, prevFyEnd);
+            prevTotalInitiatives = initiativeRepository.countByStartDateBetween(prevFyStartDate, prevFyEndDate);
+            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsByStartDateBetween(prevFyStartDate, prevFyEndDate);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
             prevActualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueByMonitoringMonthBetween(prevStartMonth, prevEndMonth);
@@ -465,18 +485,18 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValuesByBudgetType(budgetType);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValuesByBudgetType(budgetType);
             } else {
-                // Budget type specific metrics - current FY (count ALL initiatives created in FY with budget type, regardless of status)
-                totalInitiatives = initiativeRepository.countByBudgetTypeAndCreatedAtBetween(budgetType, fyStart, fyEnd);
-                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetweenAndBudgetType(fyStart, fyEnd, budgetType);
+                // Budget type specific metrics - current FY (count ALL initiatives by startDate in FY with budget type, regardless of status)
+                totalInitiatives = initiativeRepository.countByBudgetTypeAndStartDateBetween(budgetType, fyStartDate, fyEndDate);
+                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsByStartDateBetweenAndBudgetType(fyStartDate, fyEndDate, budgetType);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
-                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsByCreatedAtBetweenAndBudgetType(fyStart, fyEnd, budgetType);
+                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsByStartDateBetweenAndBudgetType(fyStartDate, fyEndDate, budgetType);
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueByMonitoringMonthBetweenAndBudgetType(startMonth, endMonth, budgetType);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumTargetValueByMonitoringMonthBetweenAndBudgetType(startMonth, endMonth, budgetType);
             }
             
             // Budget type specific metrics - previous FY
-            prevTotalInitiatives = initiativeRepository.countByBudgetTypeAndCreatedAtBetween(budgetType, prevFyStart, prevFyEnd);
-            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsByCreatedAtBetweenAndBudgetType(prevFyStart, prevFyEnd, budgetType);
+            prevTotalInitiatives = initiativeRepository.countByBudgetTypeAndStartDateBetween(budgetType, prevFyStartDate, prevFyEndDate);
+            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsByStartDateBetweenAndBudgetType(prevFyStartDate, prevFyEndDate, budgetType);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
             prevActualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueByMonitoringMonthBetweenAndBudgetType(prevStartMonth, prevEndMonth, budgetType);
@@ -615,15 +635,20 @@ public class DashboardService {
     
     /**
      * Calculate performance metrics for a specific site and budget type
+     * UPDATED: Now uses startDate for FY filtering instead of createdAt
      */
     private PerformanceAnalysisDTO.PerformanceMetrics calculatePerformanceMetricsBySite(
             String site, String budgetType, LocalDateTime fyStart, LocalDateTime fyEnd, 
             String startMonth, String endMonth, boolean isAllYears) {
         
+        // Convert LocalDateTime to LocalDate for startDate filtering
+        LocalDate fyStartDate = fyStart.toLocalDate();
+        LocalDate fyEndDate = fyEnd.toLocalDate();
+        
         // Get previous financial year data for trend calculation
-        LocalDateTime[] prevFyRange = getPreviousFinancialYearRange();
-        LocalDateTime prevFyStart = prevFyRange[0];
-        LocalDateTime prevFyEnd = prevFyRange[1];
+        LocalDate[] prevFyDateRange = getPreviousFinancialYearDateRange();
+        LocalDate prevFyStartDate = prevFyDateRange[0];
+        LocalDate prevFyEndDate = prevFyDateRange[1];
         String[] prevMonthRange = getPreviousFinancialYearMonthRange();
         String prevStartMonth = prevMonthRange[0];
         String prevEndMonth = prevMonthRange[1];
@@ -651,35 +676,35 @@ public class DashboardService {
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAllAchievedValuesBySite(site);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumAllTargetValuesBySite(site);
             } else {
-                // Overall metrics for site - current FY (count ALL initiatives created in FY for site, regardless of status)
-                totalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
-                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
+                // Overall metrics for site - current FY (count ALL initiatives by startDate in FY for site, regardless of status)
+                totalInitiatives = initiativeRepository.countBySiteAndStartDateBetween(site, fyStartDate, fyEndDate);
+                BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetween(site, fyStartDate, fyEndDate);
                 potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
-                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, fyStart, fyEnd);
+                potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetween(site, fyStartDate, fyEndDate);
                 actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueBySiteAndMonitoringMonthBetween(site, startMonth, endMonth);
                 savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumTargetValueBySiteAndMonitoringMonthBetween(site, startMonth, endMonth);
             }
             
             // Overall metrics for site - previous FY
-            prevTotalInitiatives = initiativeRepository.countBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
-            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetween(site, prevFyStart, prevFyEnd);
+            prevTotalInitiatives = initiativeRepository.countBySiteAndStartDateBetween(site, prevFyStartDate, prevFyEndDate);
+            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetween(site, prevFyStartDate, prevFyEndDate);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
             prevActualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueBySiteAndMonitoringMonthBetween(site, prevStartMonth, prevEndMonth);
             prevSavingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumTargetValueBySiteAndMonitoringMonthBetween(site, prevStartMonth, prevEndMonth);
         } else {
-            // Budget type specific metrics for site - current FY (count ALL initiatives created in FY for site with budget type, regardless of status)
-            totalInitiatives = initiativeRepository.countBySiteAndBudgetTypeAndCreatedAtBetween(site, budgetType, fyStart, fyEnd);
-            // Filter Annualized Projected Savings by current FY, site and budget type
-            BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetweenAndBudgetType(site, fyStart, fyEnd, budgetType);
+            // Budget type specific metrics for site - current FY (count ALL initiatives by startDate in FY for site with budget type, regardless of status)
+            totalInitiatives = initiativeRepository.countBySiteAndBudgetTypeAndStartDateBetween(site, budgetType, fyStartDate, fyEndDate);
+            // Filter Annualized Projected Savings by current FY startDate, site and budget type
+            BigDecimal totalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetweenAndBudgetType(site, fyStartDate, fyEndDate, budgetType);
             potentialSavingsAnnualized = totalExpectedSavings != null ? totalExpectedSavings : BigDecimal.ZERO;
-            potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetweenAndBudgetType(site, fyStart, fyEnd, budgetType);
+            potentialSavingsCurrentFY = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetweenAndBudgetType(site, fyStartDate, fyEndDate, budgetType);
             actualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueBySiteAndMonitoringMonthBetweenAndBudgetType(site, startMonth, endMonth, budgetType);
             savingsProjectionCurrentFY = monthlyMonitoringEntryRepository.sumTargetValueBySiteAndMonitoringMonthBetweenAndBudgetType(site, startMonth, endMonth, budgetType);
             
             // Budget type specific metrics for site - previous FY
-            prevTotalInitiatives = initiativeRepository.countBySiteAndBudgetTypeAndCreatedAtBetween(site, budgetType, prevFyStart, prevFyEnd);
-            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndCreatedAtBetweenAndBudgetType(site, prevFyStart, prevFyEnd, budgetType);
+            prevTotalInitiatives = initiativeRepository.countBySiteAndBudgetTypeAndStartDateBetween(site, budgetType, prevFyStartDate, prevFyEndDate);
+            BigDecimal prevTotalExpectedSavings = initiativeRepository.sumExpectedSavingsBySiteAndStartDateBetweenAndBudgetType(site, prevFyStartDate, prevFyEndDate, budgetType);
             prevPotentialSavingsAnnualized = prevTotalExpectedSavings != null ? prevTotalExpectedSavings : BigDecimal.ZERO;
             prevPotentialSavingsCurrentFY = prevPotentialSavingsAnnualized;
             prevActualSavingsCurrentFY = monthlyMonitoringEntryRepository.sumAchievedValueBySiteAndMonitoringMonthBetweenAndBudgetType(site, prevStartMonth, prevEndMonth, budgetType);
@@ -776,6 +801,28 @@ public class DashboardService {
     }
     
     /**
+     * Get financial year date range as LocalDate array [start, end] for startDate filtering
+     * For 2025: April 1, 2025 to March 31, 2026
+     */
+    private LocalDate[] getFinancialYearDateRange() {
+        LocalDate today = LocalDate.now();
+        int year = today.getYear(); // 2025
+        
+        LocalDate fyStart, fyEnd;
+        if (today.getMonthValue() >= 4) {
+            // Current FY: April 1st 2025 to March 31st 2026
+            fyStart = LocalDate.of(year, 4, 1);       // 2025-04-01
+            fyEnd = LocalDate.of(year + 1, 3, 31);    // 2026-03-31
+        } else {
+            // Current FY: April 1st 2024 to March 31st 2025
+            fyStart = LocalDate.of(year - 1, 4, 1);   // 2024-04-01
+            fyEnd = LocalDate.of(year, 3, 31);        // 2025-03-31
+        }
+        
+        return new LocalDate[]{fyStart, fyEnd};
+    }
+    
+    /**
      * Get financial year month range as string array [startMonth, endMonth] in YYYY-MM format
      * For 2025: "2025-04" to "2026-03"
      */
@@ -823,6 +870,28 @@ public class DashboardService {
     }
     
     /**
+     * Get previous financial year date range as LocalDate array [start, end] for startDate filtering
+     * For current FY 2025-26: returns 2024-25 (April 1, 2024 to March 31, 2025)
+     */
+    private LocalDate[] getPreviousFinancialYearDateRange() {
+        LocalDate today = LocalDate.now();
+        int year = today.getYear(); // 2025
+        
+        LocalDate fyStart, fyEnd;
+        if (today.getMonthValue() >= 4) {
+            // Previous FY: April 1st 2024 to March 31st 2025
+            fyStart = LocalDate.of(year - 1, 4, 1);   // 2024-04-01
+            fyEnd = LocalDate.of(year, 3, 31);        // 2025-03-31
+        } else {
+            // Previous FY: April 1st 2023 to March 31st 2024
+            fyStart = LocalDate.of(year - 2, 4, 1);   // 2023-04-01
+            fyEnd = LocalDate.of(year - 1, 3, 31);    // 2024-03-31
+        }
+        
+        return new LocalDate[]{fyStart, fyEnd};
+    }
+    
+    /**
      * Get previous financial year month range as string array [startMonth, endMonth] in YYYY-MM format
      * For current FY 2025-26: returns "2024-04" to "2025-03"
      */
@@ -860,6 +929,18 @@ public class DashboardService {
     }
     
     /**
+     * Get financial year date range for a specific year as LocalDate array [start, end] for startDate filtering
+     */
+    private LocalDate[] getFinancialYearDateRange(String financialYear) {
+        int year = Integer.parseInt(financialYear); // e.g., 2025 for FY 2025-26
+        
+        LocalDate fyStart = LocalDate.of(year, 4, 1);       // April 1st, 2025
+        LocalDate fyEnd = LocalDate.of(year + 1, 3, 31);    // March 31st, 2026
+        
+        return new LocalDate[]{fyStart, fyEnd};
+    }
+    
+    /**
      * Get financial year month range for a specific year as string array [startMonth, endMonth]
      */
     private String[] getFinancialYearMonthRange(String financialYear) {
@@ -884,6 +965,18 @@ public class DashboardService {
             fyStart.atStartOfDay(),
             fyEnd.atTime(23, 59, 59)
         };
+    }
+    
+    /**
+     * Get previous financial year date range for a specific year as LocalDate array [start, end] for startDate filtering
+     */
+    private LocalDate[] getPreviousFinancialYearDateRange(String financialYear) {
+        int year = Integer.parseInt(financialYear); // e.g., 2025 for FY 2025-26
+        
+        LocalDate fyStart = LocalDate.of(year - 1, 4, 1);   // April 1st, 2024
+        LocalDate fyEnd = LocalDate.of(year, 3, 31);        // March 31st, 2025
+        
+        return new LocalDate[]{fyStart, fyEnd};
     }
     
     /**
