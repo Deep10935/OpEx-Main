@@ -183,8 +183,8 @@ public class InitiativeService {
         initiative.setEstimatedCapex(request.getEstimatedCapex()); // Allow zero values
         initiative.setBudgetType(request.getBudgetType());
         
-        // Generate initiative number
-        String initiativeNumber = generateInitiativeNumber(request.getSite(), request.getDiscipline());
+        // Generate initiative number based on selected start date
+        String initiativeNumber = generateInitiativeNumber(request.getSite(), request.getDiscipline(), request.getStartDate());
         initiative.setInitiativeNumber(initiativeNumber);
 
         Initiative savedInitiative = initiativeRepository.save(initiative);
@@ -258,20 +258,20 @@ public class InitiativeService {
         return initiativeRepository.findByPriority(priority);
     }
 
-    private String generateInitiativeNumber(String site, String discipline) {
-        // Get current year (2-digit format)
-        int currentYear = java.time.LocalDate.now().getYear();
-        String yearCode = String.format("%02d", currentYear % 100);
+    private String generateInitiativeNumber(String site, String discipline, LocalDate initiativeDate) {
+        // Get year from the selected initiative date (2-digit format)
+        int selectedYear = initiativeDate != null ? initiativeDate.getYear() : java.time.LocalDate.now().getYear();
+        String yearCode = String.format("%02d", selectedYear % 100);
         
         // Map discipline to category code
         String categoryCode = getDisciplineCategoryCode(discipline);
         
         // Get discipline-specific sequential number for the site
-        Long disciplineCount = initiativeRepository.countBySiteAndDisciplineAndYear(site, discipline, currentYear);
+        Long disciplineCount = initiativeRepository.countBySiteAndDisciplineAndYear(site, discipline, selectedYear);
         String disciplineSequential = String.format("%02d", disciplineCount + 1);
         
         // Get overall site-specific initiative number
-        Long siteCount = initiativeRepository.countBySiteAndYear(site, currentYear);
+        Long siteCount = initiativeRepository.countBySiteAndYear(site, selectedYear);
         String overallSequential = String.format("%03d", siteCount + 1);
         
         // Format: ZZZ/YY/XX/AB/123

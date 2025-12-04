@@ -150,8 +150,8 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
       endDate: new Date(data.date.getTime() + 365 * 24 * 60 * 60 * 1000)
         .toISOString()
         .split("T")[0],
-      requiresMoc: data.estimatedCapex > 10,
-      requiresCapex: data.estimatedCapex > 0,
+      requiresMoc: data.estimatedCapex > 10 ? "Y" : "N",
+      requiresCapex: data.estimatedCapex > 0 ? "Y" : "N",
       budgetType: data.budgetType,
       baselineData: data.baselineData,
       targetOutcome: data.targetOutcome,
@@ -697,7 +697,7 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
                     name="expectedValue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-medium">Expected Value (₹ Lakhs) *</FormLabel>
+                        <FormLabel className="text-xs font-medium">Expected Value (₹) *</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -727,7 +727,7 @@ export default function InitiativeForm({ user }: InitiativeFormProps) {
                     name="estimatedCapex"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-medium">Estimated CAPEX (₹ Lakhs) *</FormLabel>
+                        <FormLabel className="text-xs font-medium">Estimated CAPEX (₹) *</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
