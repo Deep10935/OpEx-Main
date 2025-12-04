@@ -174,49 +174,28 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
     
     // Financial Year filtering methods - using same FY logic as DashboardService
     // Financial year runs from April 1 to March 31
-    // Filter by initiative execution period (startDate/endDate) overlapping with FY period
-    // Note: startDate and endDate are LocalDate fields, need to cast LocalDateTime params to date
     
-    @Query("SELECT i FROM Initiative i WHERE (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByFinancialYear(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.site = :site AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.site = :site AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findBySiteAndFinancialYear(@Param("site") String site, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByStatusAndFinancialYear(@Param("status") String status, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByStatusAndSiteAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.title LIKE %:title% AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.title LIKE %:title% AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByTitleContainingAndFinancialYear(@Param("title") String title, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.initiativeNumber LIKE %:initiativeNumber% AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.initiativeNumber LIKE %:initiativeNumber% AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByInitiativeNumberContainingAndFinancialYear(@Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.title LIKE %:title% AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.title LIKE %:title% AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByStatusAndSiteAndTitleContainingAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("title") String title, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
-    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.initiativeNumber LIKE %:initiativeNumber% AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.initiativeNumber LIKE %:initiativeNumber% AND i.createdAt >= :startDate AND i.createdAt <= :endDate")
     Page<Initiative> findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
-    
-    // Additional FY filtering methods for dashboard statistics - using startDate/endDate overlap
-    @Query("SELECT COUNT(i) FROM Initiative i WHERE (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
-    Long countByFinancialYear(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
-    Long countBySiteAndFinancialYear(@Param("site") String site, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.status = :status AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
-    Long countByStatusAndFinancialYear(@Param("status") String status, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.status = :status AND i.site = :site AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date))")
-    Long countByStatusAndSiteAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
-    
-    @Query("SELECT i FROM Initiative i WHERE (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date)) ORDER BY i.createdAt DESC")
-    Page<Initiative> findByFinancialYearOrderByCreatedAtDesc(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
-    
-    @Query("SELECT i FROM Initiative i WHERE i.site = :site AND (i.startDate <= CAST(:endDate AS date) AND i.endDate >= CAST(:startDate AS date)) ORDER BY i.createdAt DESC")
-    Page<Initiative> findBySiteAndFinancialYearOrderByCreatedAtDesc(@Param("site") String site, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
 }
