@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { authAPI } from "@/lib/api";
 import GlassmorphLoader from "@/components/ui/GlassmorphLoader";
+import { useDisciplines } from "@/hooks/useDisciplines";
 
 const sites = [
   { code: "NDS", name: "NDS" },
@@ -20,15 +21,7 @@ const sites = [
   { code: "CORP", name: "CORP" }
 ];
 
-const disciplines = [
-  { code: "OP", name: "Operation" },
-  { code: "EG", name: "Engineering & Utility" },
-  { code: "EV", name: "Environment" },
-  { code: "SF", name: "Safety" },
-  { code: "QA", name: "Quality" },
-  { code: "OT", name: "Others" }
-];
-
+// Removed hardcoded disciplines - now fetched from API
 // Removed roles array - using default role now
 
 interface AuthProps {
@@ -63,6 +56,9 @@ export default function AuthPage({ onLogin }: AuthProps) {
   const [loadingSubmessage, setLoadingSubmessage] = useState("Please wait while we verify your credentials...");
   const { toast } = useToast();
   const { login, register } = useAuth();
+
+  // Get disciplines from API
+  const { data: disciplines = [], isLoading: disciplinesLoading } = useDisciplines();
 
   const validateEmail = (email: string) => {
     if (!email) return false;
@@ -641,9 +637,13 @@ export default function AuthPage({ onLogin }: AuthProps) {
 
                     <div className="space-y-1.5">
                       <Label htmlFor="discipline" className="text-gray-700 font-medium text-xs">Discipline *</Label>
-                      <Select value={formData.discipline} onValueChange={(value) => handleInputChange("discipline", value)}>
+                      <Select value={formData.discipline} onValueChange={(value) => handleInputChange("discipline", value)} disabled={disciplinesLoading}>
                         <SelectTrigger className="bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500/20 transition-colors duration-200 h-9 text-sm">
-                          <SelectValue placeholder="Discipline" />
+                          <SelectValue placeholder={
+                            disciplinesLoading ? "Loading disciplines..." : 
+                            disciplines.length === 0 ? "No disciplines available" :
+                            "Discipline"
+                          } />
                         </SelectTrigger>
                         <SelectContent className="bg-white border-gray-300">
                           {disciplines.map((discipline) => (
@@ -653,6 +653,11 @@ export default function AuthPage({ onLogin }: AuthProps) {
                           ))}
                         </SelectContent>
                       </Select>
+                      {disciplines.length === 0 && !disciplinesLoading && (
+                        <p className="text-xs text-red-600 mt-1">
+                          No disciplines found. Please contact administrator.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </TabsContent>

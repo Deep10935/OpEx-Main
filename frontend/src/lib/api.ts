@@ -24,15 +24,15 @@ const getApiBaseUrl = (): string => {
 const API_BASE_URL = getApiBaseUrl();
 
 // Debug logging
-console.log('🔍 API Configuration Debug:');
-console.log('Current hostname:', window.location.hostname);
-console.log('Current port:', window.location.port);
-console.log('Current full URL:', window.location.href);
-console.log('Detected API_BASE_URL:', API_BASE_URL);
+// console.log('🔍 API Configuration Debug:');
+// console.log('Current hostname:', window.location.hostname);
+// console.log('Current port:', window.location.port);
+// console.log('Current full URL:', window.location.href);
+// console.log('Detected API_BASE_URL:', API_BASE_URL);
 
 // Force absolute URL validation
 if (!API_BASE_URL.startsWith('http')) {
-  console.error('❌ API_BASE_URL is not absolute:', API_BASE_URL);
+  // console.error('❌ API_BASE_URL is not absolute:', API_BASE_URL);
   throw new Error('Invalid API base URL configuration');
 }
 
@@ -52,27 +52,27 @@ api.interceptors.request.use((config) => {
   }
   
   // Enhanced debugging for initiative calls
-  if (config.url?.includes('initiatives')) {
-    console.log('🚨 INITIATIVE API DEBUG:');
-    console.log('Request URL:', config.url);
-    console.log('Base URL:', config.baseURL);
-    console.log('Full URL:', config.baseURL + config.url);
-    console.log('Method:', config.method?.toUpperCase());
-    console.log('Config:', config);
-  }
+  // if (config.url?.includes('initiatives')) {
+  //   console.log('🚨 INITIATIVE API DEBUG:');
+  //   console.log('Request URL:', config.url);
+  //   console.log('Base URL:', config.baseURL);
+  //   console.log('Full URL:', config.baseURL + config.url);
+  //   console.log('Method:', config.method?.toUpperCase());
+  //   console.log('Config:', config);
+  // }
   
-  console.log('API Request:', config.method?.toUpperCase(), config.url, config.data);
+  // console.log('API Request:', config.method?.toUpperCase(), config.url, config.data);
   return config;
 });
 
 // Handle token expiration
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url, response.data);
+    // console.log('API Response:', response.status, response.config.url, response.data);
     return response;
   },
   (error) => {
-    console.error('API Error:', error.response?.status, error.response?.data, error.message);
+    // console.error('API Error:', error.response?.status, error.response?.data, error.message);
     if (error.response?.status === 401) {
       localStorage.removeItem('opex_token');
       localStorage.removeItem('opex_user');
@@ -217,7 +217,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/stats?${params.toString()}` : '/dashboard/stats';
-    console.log('🔍 Dashboard API - getStats URL:', url);
+    // console.log('🔍 Dashboard API - getStats URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -229,7 +229,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/stats/${site}?${params.toString()}` : `/dashboard/stats/${site}`;
-    console.log('🔍 Dashboard API - getStatsBySite URL:', url);
+    // console.log('🔍 Dashboard API - getStatsBySite URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -241,7 +241,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/recent-initiatives?${params.toString()}` : '/dashboard/recent-initiatives';
-    console.log('🔍 Dashboard API - getRecentInitiatives URL:', url);
+    // console.log('🔍 Dashboard API - getRecentInitiatives URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -253,7 +253,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/recent-initiatives/${site}?${params.toString()}` : `/dashboard/recent-initiatives/${site}`;
-    console.log('🔍 Dashboard API - getRecentInitiativesBySite URL:', url);
+    // console.log('🔍 Dashboard API - getRecentInitiativesBySite URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -265,7 +265,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/performance-analysis?${params.toString()}` : '/dashboard/performance-analysis';
-    console.log('🔍 Dashboard API - getPerformanceAnalysis URL:', url);
+    // console.log('🔍 Dashboard API - getPerformanceAnalysis URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -277,7 +277,7 @@ export const dashboardAPI = {
       params.append('financialYear', financialYear);
     }
     const url = params.toString() ? `/dashboard/performance-analysis/${site}?${params.toString()}` : `/dashboard/performance-analysis/${site}`;
-    console.log('🔍 Dashboard API - getPerformanceAnalysisBySite URL:', url);
+    // console.log('🔍 Dashboard API - getPerformanceAnalysisBySite URL:', url);
     const response = await api.get(url);
     return response.data;
   },
@@ -877,7 +877,7 @@ export const reportsAPI = {
         initiativeNumber = initiativeResponse.data.initiativeNumber;
       }
     } catch (error) {
-      console.warn('Could not fetch initiative number, using ID as fallback');
+      // console.warn('Could not fetch initiative number, using ID as fallback');
     }
 
     const response = await api.get(`/reports/export/initiative-form/${initiativeId}`, {
