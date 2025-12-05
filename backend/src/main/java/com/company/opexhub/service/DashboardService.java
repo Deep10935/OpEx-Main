@@ -116,15 +116,15 @@ public class DashboardService {
             previousCompletedInitiatives = initiativeRepository.countByStatusAndStartDateBetween("Completed", prevFyStartDate, prevFyEndDate);
         }
 
-        // Pending Approvals for the financial year or all years (keeping createdAt for workflow transactions)
+        // Pending Approvals for the financial year or all years (USING startDate for FY filtering)
         Long pendingApprovals;
         Long previousPendingApprovals;
         if (isAllYears) {
             pendingApprovals = workflowTransactionRepository.countByApproveStatusAndPendingWithIsNotNull("pending");
-            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(fyStart, prevFyEndDate.atTime(23, 59, 59), "pending");
+            previousPendingApprovals = workflowTransactionRepository.countByInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStartDate, prevFyEndDate, "pending");
         } else {
-            pendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(fyStart, fyEnd, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countByInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
+            pendingApprovals = workflowTransactionRepository.countByInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(fyStartDate, fyEndDate, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countByInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(prevFyStartDate, prevFyEndDate, "pending");
         }
 
         // Ensure non-null values
@@ -272,15 +272,15 @@ public class DashboardService {
             previousCompletedInitiatives = initiativeRepository.countByStatusAndSiteAndStartDateBetween("Completed", site, prevFyStartDate, prevFyEndDate);
         }
 
-        // Pending Approvals for site and financial year or all years (keeping createdAt for workflow transactions)
+        // Pending Approvals for site and financial year or all years (USING startDate for FY filtering)
         Long pendingApprovals;
         Long previousPendingApprovals;
         if (isAllYears) {
             pendingApprovals = workflowTransactionRepository.countBySiteAndApproveStatusAndPendingWithIsNotNull(site, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
+            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate, prevFyEndDate, "pending");
         } else {
-            pendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, fyStart, fyEnd, "pending");
-            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate.atStartOfDay(), prevFyEndDate.atTime(23, 59, 59), "pending");
+            pendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(site, fyStartDate, fyEndDate, "pending");
+            previousPendingApprovals = workflowTransactionRepository.countBySiteAndInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(site, prevFyStartDate, prevFyEndDate, "pending");
         }
 
         // Ensure non-null values

@@ -74,4 +74,15 @@ public interface WorkflowTransactionRepository extends JpaRepository<WorkflowTra
     
     @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt JOIN Initiative i ON wt.initiativeId = i.id WHERE wt.site = :site AND i.createdAt >= :startDate AND i.createdAt <= :endDate AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
     Long countBySiteAndInitiativeCreatedAtBetweenAndApproveStatusAndPendingWithIsNotNull(@Param("site") String site, @Param("startDate") java.time.LocalDateTime startDate, @Param("endDate") java.time.LocalDateTime endDate, @Param("approveStatus") String approveStatus);
+    
+    // ============================================================================
+    // NEW: FY-based queries using Initiative's startDate instead of createdAt
+    // ============================================================================
+    
+    // Count workflow transactions by Initiative's startDate for FY filtering
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt JOIN Initiative i ON wt.initiativeId = i.id WHERE i.startDate >= :startDate AND i.startDate <= :endDate AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countByInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(@Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate, @Param("approveStatus") String approveStatus);
+    
+    @Query("SELECT COUNT(wt) FROM WorkflowTransaction wt JOIN Initiative i ON wt.initiativeId = i.id WHERE wt.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate AND wt.approveStatus = :approveStatus AND wt.pendingWith IS NOT NULL")
+    Long countBySiteAndInitiativeStartDateBetweenAndApproveStatusAndPendingWithIsNotNull(@Param("site") String site, @Param("startDate") java.time.LocalDate startDate, @Param("endDate") java.time.LocalDate endDate, @Param("approveStatus") String approveStatus);
 }
