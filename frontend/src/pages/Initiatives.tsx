@@ -756,25 +756,44 @@ export default function Initiatives({ user }: InitiativesProps) {
   const [itemsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState("all");
   const [siteFilter, setSiteFilter] = useState(user.site || "all"); // Default to logged-in user's site
-  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString()); // Default to current year
+  const [yearFilter, setYearFilter] = useState(""); // Will be set to current FY
   const [disciplineFilter, setDisciplineFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [availableFinancialYears, setAvailableFinancialYears] = useState<string[]>([]);
 
-  // Fetch available years dynamically from backend
-  const { data: availableYears } = useInitiatives({});
-  const years = React.useMemo(() => {
-    if (availableYears?.content) {
-      const uniqueYears = new Set<string>();
-      availableYears.content.forEach((item: any) => {
-        if (item.startDate) {
-          const year = new Date(item.startDate).getFullYear().toString();
-          uniqueYears.add(year);
+  // Fetch available financial years on component mount
+  React.useEffect(() => {
+    const fetchAvailableFinancialYears = async () => {
+      try {
+        const years = await reportsAPI.getAvailableFinancialYears();
+        setAvailableFinancialYears(years);
+        if (years.length > 0 && !yearFilter) {
+          setYearFilter(years[0]); // Set current FY as default
         }
-      });
-      return Array.from(uniqueYears).sort((a, b) => parseInt(b) - parseInt(a));
-    }
-    return [];
-  }, [availableYears]);
+      } catch (error) {
+        console.error('Error fetching available financial years:', error);
+      }
+    };
+
+    fetchAvailableFinancialYears();
+  }, []);
+
+  // Convert selectedFinancialYear to full year format for API calls (same as Dashboard.tsx)
+  const convertToFullYear = (year: string): string => {
+    if (!year) return '';
+    return year.length === 2 ? `20${year}` : year;
+  };
+
+  const fullYearForAPI = yearFilter && yearFilter !== 'all' ? convertToFullYear(yearFilter) : undefined;
+
+  // Debug logging to verify financial year conversion
+  console.log('🔍 Initiatives FY Debug:', {
+    yearFilter,
+    fullYearForAPI,
+    siteFilter,
+    statusFilter,
+    disciplineFilter
+  });
 
   // Reset pagination when filters change (excluding searchTerm for better performance)
   React.useEffect(() => {
@@ -786,11 +805,11 @@ export default function Initiatives({ user }: InitiativesProps) {
     setCurrentPage(1);
   }, [searchTerm]);
 
-  // Use real API or fallback to mock data - search is done on frontend
+  // Use real API or fallback to mock data - pass financialYear to backend (same as Dashboard.tsx)
   const { data: apiInitiatives, isLoading, error } = useInitiatives({
     status: statusFilter !== "all" ? statusFilter : undefined,
     site: siteFilter !== "all" ? siteFilter : undefined,
-    year: yearFilter !== "all" ? yearFilter : undefined,
+    financialYear: fullYearForAPI, // Pass financialYear to backend API
     discipline: disciplineFilter !== "all" ? disciplineFilter : undefined,
     // Removed search from API call - search will be done on frontend for better performance
   });
@@ -894,25 +913,15 @@ export default function Initiatives({ user }: InitiativesProps) {
     }
   };
 
-  // Filter sorted initiatives
+  // Filter sorted initiatives (FY filtering done by backend API)
   const filteredInitiatives = sortedInitiatives.filter((initiative: Initiative) => {
-    // Exact status matching with database STATUS column values
-    const matchesStatus = statusFilter === "all" || initiative.status.trim() === statusFilter;
-    const matchesSite = siteFilter === "all" || initiative.site === siteFilter;
-    
-    // Year filter based on start date
-    const matchesYear = yearFilter === "all" || 
-      (initiative.startDate && new Date(initiative.startDate).getFullYear().toString() === yearFilter);
-    
-    // Discipline filter
-    const matchesDiscipline = disciplineFilter === "all" || initiative.discipline === disciplineFilter;
-    
+    // Only apply search filter on frontend (status, site, FY, discipline already filtered by backend)
     const matchesSearch = searchTerm === "" || 
       (initiative.title && initiative.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (initiative.initiativeNumber && initiative.initiativeNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (initiative.id && initiative.id.toString().toLowerCase().includes(searchTerm.toLowerCase()));
     
-    return matchesStatus && matchesSite && matchesYear && matchesDiscipline && matchesSearch;
+    return matchesSearch;
   });
 
   // Paginate filtered results
@@ -1039,14 +1048,14 @@ export default function Initiatives({ user }: InitiativesProps) {
               </Select>
 
               <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger className="w-28 h-9 text-xs">
-                  <SelectValue placeholder="All Years" />
+                <SelectTrigger className="w-32 h-9 text-xs">
+                  <SelectValue placeholder="Select FY" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Years</SelectItem>
-                  {years.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {year}
+                  {availableFinancialYears.map((fy) => (
+                    <SelectItem key={fy} value={fy}>
+                      FY {fy}-{(parseInt(fy) + 1).toString().slice(-2)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1081,7 +1090,7 @@ export default function Initiatives({ user }: InitiativesProps) {
                     {/* <TableHead className="h-12 px-4 text-sm font-semibold text-center">Current Stage</TableHead> */}
                     <TableHead className="h-10 px-4 text-xs font-semibold text-center">Expected Savings</TableHead>
                     {/* <TableHead className="h-12 px-4 text-sm font-semibold text-center">Progress</TableHead> */}
-                    <TableHead className="h-10 px-4 text-xs font-semibold text-center">Last Updated</TableHead>
+                    <TableHead className="h-10 px-4 text-xs font-semibold text-center">Start Date</TableHead>
                     <TableHead className="h-10 px-4 text-xs font-semibold text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1134,7 +1143,7 @@ export default function Initiatives({ user }: InitiativesProps) {
                       <TableCell className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5" />
-                          <span>{initiative.lastUpdated}</span>
+                          <span>{initiative.startDate ? new Date(initiative.startDate).toLocaleDateString() : 'N/A'}</span>
                         </div>
                       </TableCell>
                       <TableCell className="p-4 text-center">
@@ -1243,7 +1252,7 @@ export default function Initiatives({ user }: InitiativesProps) {
                   <div className="flex items-center justify-between pt-3 border-t border-border">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
-                      <span>Updated: {initiative.lastUpdated}</span>
+                      <span>Start: {initiative.startDate ? new Date(initiative.startDate).toLocaleDateString() : 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Button 

@@ -14,8 +14,8 @@ export const useInitiatives = (filters?: {
     queryKey: ['initiatives', filters],
     queryFn: async () => {
       try {
-        // Try real API first
-        return await initiativeAPI.getAll(filters);
+        // Try real API first - fetch all records with large page size for client-side pagination
+        return await initiativeAPI.getAll({ ...filters, page: 0, size: 1000 });
       } catch (error) {
         console.warn('Failed to fetch from API, using mock data:', error);
         // Fallback to mock data
