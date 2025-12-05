@@ -289,26 +289,26 @@ export default function Dashboard({ user }: DashboardProps) {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* Filters - Compact Design */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
         {/* Site Filter */}
-        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-3 border ${
+        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-2 border ${
           selectedSite === "overall" 
             ? 'bg-blue-50/80 border-blue-200' 
             : 'bg-white/50 border-gray-200'
         }`}>
-          <div className="flex items-center gap-2">
-            <Filter className={`h-4 w-4 ${selectedSite === "overall" ? 'text-blue-600' : 'text-blue-600'}`} />
-            <span className="text-sm font-medium text-gray-700">Filter by Site:</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Filter className={`h-3 w-3 shrink-0 ${selectedSite === "overall" ? 'text-blue-600' : 'text-blue-600'}`} />
+            <span className="text-xs font-medium text-gray-700 truncate">Site:</span>
             {selectedSite === "overall" && (
-              <Badge variant="secondary" className="text-2xs bg-blue-100 text-blue-700">
-                Overall View
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-blue-100 text-blue-700 shrink-0">
+                Overall
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Select value={selectedSite} onValueChange={setSelectedSite}>
-              <SelectTrigger className="w-40 h-8 text-xs bg-white border-gray-300 focus:border-blue-500">
+              <SelectTrigger className="w-32 h-7 text-xs bg-white border-gray-300 focus:border-blue-500">
                 <SelectValue placeholder="Select site" />
               </SelectTrigger>
               <SelectContent>
@@ -325,7 +325,7 @@ export default function Dashboard({ user }: DashboardProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedSite("overall")}
-                className="h-8 px-2 text-xs text-gray-500 hover:text-gray-700"
+                className="h-7 px-1.5 text-[10px] text-gray-500 hover:text-gray-700"
               >
                 Clear
               </Button>
@@ -334,21 +334,21 @@ export default function Dashboard({ user }: DashboardProps) {
         </div>
 
         {/* Financial Year Filter */}
-        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-3 border ${
+        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-2 border ${
           selectedFinancialYear === 'all' 
             ? 'bg-purple-50/80 border-purple-200' 
             : 'bg-white/50 border-gray-200'
         }`}>
-          <div className="flex items-center gap-2">
-            <IndianRupee className={`h-4 w-4 ${selectedFinancialYear === 'all' ? 'text-purple-600' : 'text-green-600'}`} />
-            <span className="text-sm font-medium text-gray-700">Financial Year:</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <IndianRupee className={`h-3 w-3 shrink-0 ${selectedFinancialYear === 'all' ? 'text-purple-600' : 'text-green-600'}`} />
+            <span className="text-xs font-medium text-gray-700 truncate">FY:</span>
             {selectedFinancialYear === 'all' && (
-              <Badge variant="secondary" className="text-2xs bg-purple-100 text-purple-700">
-                All Years Active
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-purple-100 text-purple-700 shrink-0">
+                All
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Select 
               value={selectedFinancialYear} 
               onValueChange={(value) => {
@@ -359,7 +359,7 @@ export default function Dashboard({ user }: DashboardProps) {
                 }
               }}
             >
-              <SelectTrigger className={`w-40 h-8 text-xs bg-white border-gray-300 ${
+              <SelectTrigger className={`w-32 h-7 text-xs bg-white border-gray-300 ${
                 selectedFinancialYear === 'all' ? 'focus:border-purple-500' : 'focus:border-green-500'
               }`}>
                 <SelectValue placeholder="Select FY" />
@@ -379,27 +379,27 @@ export default function Dashboard({ user }: DashboardProps) {
         </div>
 
         {/* Quarter Filter */}
-        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-3 border ${
+        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-2 border ${
           selectedQuarter !== 'all' && selectedFinancialYear !== 'all'
             ? 'bg-orange-50/80 border-orange-200' 
             : 'bg-white/50 border-gray-200'
         } ${selectedFinancialYear === 'all' ? 'opacity-50' : ''}`}>
-          <div className="flex items-center gap-2">
-            <BarChart3 className={`h-4 w-4 ${selectedQuarter !== 'all' ? 'text-orange-600' : 'text-gray-600'}`} />
-            <span className="text-sm font-medium text-gray-700">Quarter:</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <BarChart3 className={`h-3 w-3 shrink-0 ${selectedQuarter !== 'all' ? 'text-orange-600' : 'text-gray-600'}`} />
+            <span className="text-xs font-medium text-gray-700 truncate">Quarter:</span>
             {selectedQuarter !== 'all' && selectedFinancialYear !== 'all' && (
-              <Badge variant="secondary" className="text-2xs bg-orange-100 text-orange-700">
-                {selectedQuarter} Active
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-orange-100 text-orange-700 shrink-0">
+                {selectedQuarter}
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Select 
               value={selectedQuarter} 
               onValueChange={setSelectedQuarter}
               disabled={selectedFinancialYear === 'all'}
             >
-              <SelectTrigger className={`w-40 h-8 text-xs bg-white border-gray-300 focus:border-orange-500 ${
+              <SelectTrigger className={`w-32 h-7 text-xs bg-white border-gray-300 focus:border-orange-500 ${
                 selectedFinancialYear === 'all' ? 'cursor-not-allowed' : ''
               }`}>
                 <SelectValue placeholder="Select Quarter" />
@@ -427,7 +427,7 @@ export default function Dashboard({ user }: DashboardProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedQuarter('all')}
-                className="h-8 px-2 text-xs text-gray-500 hover:text-gray-700"
+                className="h-7 px-1.5 text-[10px] text-gray-500 hover:text-gray-700"
               >
                 Clear
               </Button>
