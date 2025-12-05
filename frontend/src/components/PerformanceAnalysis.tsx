@@ -12,13 +12,15 @@ import {
 } from "lucide-react";
 import { PerformanceMetrics } from "@/lib/types";
 
+// Props interface for PerformanceAnalysis component with FY and Quarter filters
 interface PerformanceAnalysisProps {
   title: string;
   subtitle: string;
   metrics: PerformanceMetrics;
   variant: 'overall' | 'budget' | 'nonBudget';
   isLoading: boolean;
-  selectedFinancialYear?: string; // Add selectedFinancialYear prop
+  selectedFinancialYear?: string;
+  selectedQuarter?: string;
 }
 
 export default function PerformanceAnalysis({ 
@@ -27,7 +29,8 @@ export default function PerformanceAnalysis({
   metrics, 
   variant, 
   isLoading,
-  selectedFinancialYear // Add selectedFinancialYear prop
+  selectedFinancialYear, // Add selectedFinancialYear prop
+  selectedQuarter // Add selectedQuarter prop
 }: PerformanceAnalysisProps) {
   
   // Use metrics directly from backend - they are already correctly calculated
@@ -158,11 +161,31 @@ export default function PerformanceAnalysis({
   const displayFY = convertToDisplayYear(selectedFinancialYear);
   const fyText = displayFY === 'All' ? 'All Years' : `FY ${displayFY}-${(parseInt(displayFY) + 1).toString().slice(-2)}`;
   
-  // Debug logging to verify financial year processing in PerformanceAnalysis
-  console.log('🔍 PerformanceAnalysis FY Debug:', {
+  // Helper function to get quarter display text
+  const getQuarterText = (quarter?: string): string => {
+    if (!quarter || quarter === 'all') return '';
+    
+    const quarterMap: { [key: string]: string } = {
+      'Q1': 'Q1 (Apr-Jun)',
+      'Q2': 'Q2 (Jul-Sep)',
+      'Q3': 'Q3 (Oct-Dec)',
+      'Q4': 'Q4 (Jan-Mar)'
+    };
+    
+    return quarterMap[quarter] || '';
+  };
+  
+  const quarterText = getQuarterText(selectedQuarter);
+  const isQuarterActive = selectedQuarter && selectedQuarter !== 'all';
+  
+  // Debug logging to verify financial year and quarter processing in PerformanceAnalysis
+  console.log('🔍 PerformanceAnalysis FY & Quarter Debug:', {
     selectedFinancialYear,
     displayFY,
     fyText,
+    selectedQuarter,
+    quarterText,
+    isQuarterActive,
     variant
   });
 
@@ -170,7 +193,9 @@ export default function PerformanceAnalysis({
     {
       title: "Total Initiatives",
       value: metrics?.totalInitiatives?.toString() || "0",
-      subtitle: `All initiatives in ${fyText}`,
+      subtitle: isQuarterActive 
+        ? `All initiatives in ${fyText} ${quarterText}` 
+        : `All initiatives in ${fyText}`,
       icon: Target,
       trend: formatTrend(metrics?.totalInitiativesTrend) + (displayFY === 'All' ? " vs previous period" : " vs last FY"),
       trendDirection: getTrendDirection(metrics?.totalInitiativesTrend)
@@ -178,15 +203,17 @@ export default function PerformanceAnalysis({
     {
       title: "Annualized Projected Savings",
       value: formatCurrencyInLakhs(adjustedMetrics?.potentialSavingsAnnualized || 0),
-      subtitle: displayFY === 'All' ? "Total projected across all years" : "Total yearly projection",
+      subtitle: displayFY === 'All' 
+        ? "Total projected across all years" 
+        : (isQuarterActive ? `${quarterText} yearly projection` : "Total yearly projection"),
       icon: TrendingUp,
       trend: formatTrend(metrics?.potentialSavingsAnnualizedTrend) + " vs target",
       trendDirection: getTrendDirection(metrics?.potentialSavingsAnnualizedTrend)
     },
     {
-      title: `${fyText} Projected Savings`,
+      title: isQuarterActive ? `${quarterText} Projected Savings` : `${fyText} Projected Savings`,
       value: formatCurrencyInLakhs(adjustedMetrics?.potentialSavingsCurrentFY || 0),
-      subtitle: fyText + " projection",
+      subtitle: isQuarterActive ? `${fyText} ${quarterText} projection` : `${fyText} projection`,
       icon: IndianRupee,
       trend: formatTrend(metrics?.potentialSavingsCurrentFYTrend) + (displayFY === 'All' ? " vs previous period" : " vs last FY"),
       trendDirection: getTrendDirection(metrics?.potentialSavingsCurrentFYTrend)
@@ -194,7 +221,9 @@ export default function PerformanceAnalysis({
     {
       title: "Actual Savings",
       value: formatCurrencyInLakhs(metrics?.actualSavingsCurrentFY || 0),
-      subtitle: `Realized savings ${fyText}`,
+      subtitle: isQuarterActive 
+        ? `Realized savings ${fyText} ${quarterText}` 
+        : `Realized savings ${fyText}`,
       icon: BarChart3,
       trend: formatTrend(metrics?.actualSavingsCurrentFYTrend) + (displayFY === 'All' ? " vs previous period" : " vs last FY"),
       trendDirection: getTrendDirection(metrics?.actualSavingsCurrentFYTrend)
@@ -202,7 +231,7 @@ export default function PerformanceAnalysis({
     {
       title: "Projected Savings",
       value: formatCurrencyInLakhs(metrics?.savingsProjectionCurrentFY || 0),
-      subtitle: `Expected ${fyText}`,
+      subtitle: isQuarterActive ? `Expected ${fyText} ${quarterText}` : `Expected ${fyText}`,
       icon: Activity,
       trend: formatTrend(metrics?.savingsProjectionCurrentFYTrend) + " vs forecast",
       trendDirection: getTrendDirection(metrics?.savingsProjectionCurrentFYTrend)

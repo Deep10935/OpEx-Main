@@ -218,10 +218,13 @@ export const timelineAPI = {
 };
 export const dashboardAPI = {
   // Get overall dashboard statistics
-  getStats: async (financialYear?: string) => {
+  getStats: async (financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/stats?${params.toString()}` : '/dashboard/stats';
     // console.log('🔍 Dashboard API - getStats URL:', url);
@@ -230,10 +233,13 @@ export const dashboardAPI = {
   },
 
   // Get dashboard statistics for a specific site
-  getStatsBySite: async (site: string, financialYear?: string) => {
+  getStatsBySite: async (site: string, financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/stats/${site}?${params.toString()}` : `/dashboard/stats/${site}`;
     // console.log('🔍 Dashboard API - getStatsBySite URL:', url);
@@ -242,10 +248,13 @@ export const dashboardAPI = {
   },
 
   // Get recent initiatives (latest 5)
-  getRecentInitiatives: async (financialYear?: string) => {
+  getRecentInitiatives: async (financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/recent-initiatives?${params.toString()}` : '/dashboard/recent-initiatives';
     // console.log('🔍 Dashboard API - getRecentInitiatives URL:', url);
@@ -254,10 +263,13 @@ export const dashboardAPI = {
   },
 
   // Get recent initiatives for a specific site
-  getRecentInitiativesBySite: async (site: string, financialYear?: string) => {
+  getRecentInitiativesBySite: async (site: string, financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/recent-initiatives/${site}?${params.toString()}` : `/dashboard/recent-initiatives/${site}`;
     // console.log('🔍 Dashboard API - getRecentInitiativesBySite URL:', url);
@@ -266,10 +278,13 @@ export const dashboardAPI = {
   },
 
   // Get performance analysis dashboard data
-  getPerformanceAnalysis: async (financialYear?: string) => {
+  getPerformanceAnalysis: async (financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/performance-analysis?${params.toString()}` : '/dashboard/performance-analysis';
     // console.log('🔍 Dashboard API - getPerformanceAnalysis URL:', url);
@@ -278,10 +293,13 @@ export const dashboardAPI = {
   },
 
   // Get performance analysis dashboard data for a specific site
-  getPerformanceAnalysisBySite: async (site: string, financialYear?: string) => {
+  getPerformanceAnalysisBySite: async (site: string, financialYear?: string, quarter?: string) => {
     const params = new URLSearchParams();
     if (financialYear) {
       params.append('financialYear', financialYear);
+    }
+    if (quarter && quarter !== 'all') {
+      params.append('quarter', quarter);
     }
     const url = params.toString() ? `/dashboard/performance-analysis/${site}?${params.toString()}` : `/dashboard/performance-analysis/${site}`;
     // console.log('🔍 Dashboard API - getPerformanceAnalysisBySite URL:', url);

@@ -42,6 +42,9 @@ export default function Dashboard({ user }: DashboardProps) {
   const [selectedFinancialYear, setSelectedFinancialYear] = useState<string>('');
   const [availableFinancialYears, setAvailableFinancialYears] = useState<string[]>([]);
   
+  // State for quarter filter
+  const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
+  
   // Determine which site to use for API calls
   const apiSite = selectedSite === "overall" ? undefined : selectedSite;
   
@@ -73,17 +76,22 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const fullYearForAPI = selectedFinancialYear && selectedFinancialYear !== 'all' ? convertToFullYear(selectedFinancialYear) : undefined;
   
+  // Quarter parameter - only pass if FY is selected (not "all")
+  const quarterForAPI = (selectedFinancialYear && selectedFinancialYear !== 'all') ? selectedQuarter : undefined;
+  
   // Debug logging to verify financial year conversion
   console.log('🔍 Dashboard FY Debug:', {
     selectedFinancialYear,
     fullYearForAPI,
+    selectedQuarter,
+    quarterForAPI,
     apiSite
   });
   
   // Fetch real dashboard data based on selected filter
-  const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useDashboardStats(apiSite, fullYearForAPI);
-  const { data: recentInitiativesData, isLoading: initiativesLoading, error: initiativesError } = useRecentInitiatives(apiSite, fullYearForAPI);
-  const { data: performanceAnalysisData, isLoading: performanceLoading, error: performanceError } = usePerformanceAnalysis(apiSite, fullYearForAPI);
+  const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useDashboardStats(apiSite, fullYearForAPI, quarterForAPI);
+  const { data: recentInitiativesData, isLoading: initiativesLoading, error: initiativesError } = useRecentInitiatives(apiSite, fullYearForAPI, quarterForAPI);
+  const { data: performanceAnalysisData, isLoading: performanceLoading, error: performanceError } = usePerformanceAnalysis(apiSite, fullYearForAPI, quarterForAPI);
   
   // Fetch initiatives data for consistent total count calculation with FY filter
   const { data: initiativesData } = useInitiatives(
@@ -253,12 +261,25 @@ export default function Dashboard({ user }: DashboardProps) {
           <h1 className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             OpEx Dashboard {selectedSite !== "overall" && `- ${selectedSite}`} 
             {selectedFinancialYear === 'all' && <span className="text-sm text-purple-600"> (All Years)</span>}
+            {selectedQuarter !== 'all' && selectedFinancialYear !== 'all' && (
+              <span className="text-sm text-orange-600"> ({selectedQuarter})</span>
+            )}
           </h1>
           <p className="text-muted-foreground text-xs mt-0.5">
             Welcome back, {user.fullName}! 
             {selectedSite === "overall" 
-              ? (selectedFinancialYear === 'all' ? "Viewing overall stats across all years" : "Viewing overall stats") 
-              : (selectedFinancialYear === 'all' ? `Viewing ${selectedSite} site data across all years` : `Viewing ${selectedSite} site data`)
+              ? (selectedFinancialYear === 'all' 
+                  ? "Viewing overall stats across all years" 
+                  : (selectedQuarter !== 'all' 
+                      ? `Viewing overall stats for ${selectedQuarter}` 
+                      : "Viewing overall stats")
+                )
+              : (selectedFinancialYear === 'all' 
+                  ? `Viewing ${selectedSite} site data across all years` 
+                  : (selectedQuarter !== 'all' 
+                      ? `Viewing ${selectedSite} site data for ${selectedQuarter}` 
+                      : `Viewing ${selectedSite} site data`)
+                )
             }
           </p>
         </div>
@@ -269,7 +290,7 @@ export default function Dashboard({ user }: DashboardProps) {
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* Site Filter */}
         <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-3 border ${
           selectedSite === "overall" 
@@ -328,7 +349,16 @@ export default function Dashboard({ user }: DashboardProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Select value={selectedFinancialYear} onValueChange={setSelectedFinancialYear}>
+            <Select 
+              value={selectedFinancialYear} 
+              onValueChange={(value) => {
+                setSelectedFinancialYear(value);
+                // Reset quarter to "all" when FY changes to "all"
+                if (value === 'all') {
+                  setSelectedQuarter('all');
+                }
+              }}
+            >
               <SelectTrigger className={`w-40 h-8 text-xs bg-white border-gray-300 ${
                 selectedFinancialYear === 'all' ? 'focus:border-purple-500' : 'focus:border-green-500'
               }`}>
@@ -345,6 +375,63 @@ export default function Dashboard({ user }: DashboardProps) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        {/* Quarter Filter */}
+        <div className={`flex items-center justify-between backdrop-blur-sm rounded-lg p-3 border ${
+          selectedQuarter !== 'all' && selectedFinancialYear !== 'all'
+            ? 'bg-orange-50/80 border-orange-200' 
+            : 'bg-white/50 border-gray-200'
+        } ${selectedFinancialYear === 'all' ? 'opacity-50' : ''}`}>
+          <div className="flex items-center gap-2">
+            <BarChart3 className={`h-4 w-4 ${selectedQuarter !== 'all' ? 'text-orange-600' : 'text-gray-600'}`} />
+            <span className="text-sm font-medium text-gray-700">Quarter:</span>
+            {selectedQuarter !== 'all' && selectedFinancialYear !== 'all' && (
+              <Badge variant="secondary" className="text-2xs bg-orange-100 text-orange-700">
+                {selectedQuarter} Active
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Select 
+              value={selectedQuarter} 
+              onValueChange={setSelectedQuarter}
+              disabled={selectedFinancialYear === 'all'}
+            >
+              <SelectTrigger className={`w-40 h-8 text-xs bg-white border-gray-300 focus:border-orange-500 ${
+                selectedFinancialYear === 'all' ? 'cursor-not-allowed' : ''
+              }`}>
+                <SelectValue placeholder="Select Quarter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">
+                  📊 All Quarters
+                </SelectItem>
+                <SelectItem value="Q1" className="text-xs">
+                  Q1 (Apr-Jun)
+                </SelectItem>
+                <SelectItem value="Q2" className="text-xs">
+                  Q2 (Jul-Sep)
+                </SelectItem>
+                <SelectItem value="Q3" className="text-xs">
+                  Q3 (Oct-Dec)
+                </SelectItem>
+                <SelectItem value="Q4" className="text-xs">
+                  Q4 (Jan-Mar)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            {selectedQuarter !== 'all' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedQuarter('all')}
+                className="h-8 px-2 text-xs text-gray-500 hover:text-gray-700"
+              >
+                Clear
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -602,6 +689,17 @@ export default function Dashboard({ user }: DashboardProps) {
                 Financial Year: <span className="font-semibold text-blue-600">
                   {selectedFinancialYear === 'all' ? 'All Years' : selectedFinancialYear ? `FY ${selectedFinancialYear}-${(parseInt(selectedFinancialYear) + 1).toString().slice(-2)}` : 'Loading...'}
                 </span>
+                {selectedQuarter !== 'all' && selectedFinancialYear !== 'all' && (
+                  <>
+                    <span className="text-muted-foreground"> | Quarter: </span>
+                    <span className="font-semibold text-orange-600">
+                      {selectedQuarter === 'Q1' ? 'Q1 (Apr-Jun)' : 
+                       selectedQuarter === 'Q2' ? 'Q2 (Jul-Sep)' : 
+                       selectedQuarter === 'Q3' ? 'Q3 (Oct-Dec)' : 
+                       selectedQuarter === 'Q4' ? 'Q4 (Jan-Mar)' : selectedQuarter}
+                    </span>
+                  </>
+                )}
                 {selectedSite !== "overall" && (
                   <>
                     <span className="text-muted-foreground"> | Site: </span>
@@ -633,6 +731,7 @@ export default function Dashboard({ user }: DashboardProps) {
             variant="overall"
             isLoading={performanceLoading}
             selectedFinancialYear={selectedFinancialYear}
+            selectedQuarter={selectedQuarter}
           />
 
           {/* Performance Analysis - Budget */}
@@ -650,6 +749,7 @@ export default function Dashboard({ user }: DashboardProps) {
             variant="budget"
             isLoading={performanceLoading}
             selectedFinancialYear={selectedFinancialYear}
+            selectedQuarter={selectedQuarter}
           />
 
           {/* Performance Analysis - Non-Budget */}
@@ -667,6 +767,7 @@ export default function Dashboard({ user }: DashboardProps) {
             variant="nonBudget"
             isLoading={performanceLoading}
             selectedFinancialYear={selectedFinancialYear}
+            selectedQuarter={selectedQuarter}
           />
         </TabsContent>
       </Tabs>

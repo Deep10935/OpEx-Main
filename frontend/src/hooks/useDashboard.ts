@@ -1,40 +1,40 @@
 import { useQuery } from '@tanstack/react-query';
 import { dashboardAPI } from '@/lib/api';
 
-export const useDashboardStats = (site?: string, financialYear?: string) => {
+export const useDashboardStats = (site?: string, financialYear?: string, quarter?: string) => {
   return useQuery({
-    queryKey: ['dashboard', 'stats', site, financialYear],
+    queryKey: ['dashboard', 'stats', site, financialYear, quarter],
     queryFn: async () => {
       if (site) {
-        return await dashboardAPI.getStatsBySite(site, financialYear);
+        return await dashboardAPI.getStatsBySite(site, financialYear, quarter);
       }
-      return await dashboardAPI.getStats(financialYear);
+      return await dashboardAPI.getStats(financialYear, quarter);
     },
     staleTime: 5 * 60 * 1000, // Still valid
   });
 };
 
-export const useRecentInitiatives = (site?: string, financialYear?: string) => {
+export const useRecentInitiatives = (site?: string, financialYear?: string, quarter?: string) => {
   return useQuery({
-    queryKey: ['dashboard', 'recent-initiatives', site, financialYear],
+    queryKey: ['dashboard', 'recent-initiatives', site, financialYear, quarter],
     queryFn: async () => {
       if (site) {
-        return await dashboardAPI.getRecentInitiativesBySite(site, financialYear);
+        return await dashboardAPI.getRecentInitiativesBySite(site, financialYear, quarter);
       }
-      return await dashboardAPI.getRecentInitiatives(financialYear);
+      return await dashboardAPI.getRecentInitiatives(financialYear, quarter);
     },
     staleTime: 2 * 60 * 1000, // Still valid
   });
 };
 
-export const usePerformanceAnalysis = (site?: string, financialYear?: string) => {
+export const usePerformanceAnalysis = (site?: string, financialYear?: string, quarter?: string) => {
   return useQuery({
-    queryKey: ['dashboard', 'performance-analysis', site, financialYear],
+    queryKey: ['dashboard', 'performance-analysis', site, financialYear, quarter],
     queryFn: async () => {
       if (site) {
-        return await dashboardAPI.getPerformanceAnalysisBySite(site, financialYear);
+        return await dashboardAPI.getPerformanceAnalysisBySite(site, financialYear, quarter);
       }
-      return await dashboardAPI.getPerformanceAnalysis(financialYear);
+      return await dashboardAPI.getPerformanceAnalysis(financialYear, quarter);
     },
     staleTime: 5 * 60 * 1000, // Still valid
   });
