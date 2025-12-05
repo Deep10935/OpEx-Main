@@ -229,6 +229,35 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
     Page<Initiative> findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(@Param("status") String status, @Param("site") String site, @Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
     
     // ============================================================================
+    // FY filtering methods using startDate (matching DashboardService behavior)
+    // ============================================================================
+    
+    @Query("SELECT i FROM Initiative i WHERE i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByStartDateInFY(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findBySiteAndStartDateInFY(@Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByStatusAndStartDateInFY(@Param("status") String status, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByStatusAndSiteAndStartDateInFY(@Param("status") String status, @Param("site") String site, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.title LIKE %:title% AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByTitleContainingAndStartDateInFY(@Param("title") String title, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.initiativeNumber LIKE %:initiativeNumber% AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByInitiativeNumberContainingAndStartDateInFY(@Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.title LIKE %:title% AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByStatusAndSiteAndTitleContainingAndStartDateInFY(@Param("status") String status, @Param("site") String site, @Param("title") String title, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+    @Query("SELECT i FROM Initiative i WHERE i.status = :status AND i.site = :site AND i.initiativeNumber LIKE %:initiativeNumber% AND i.startDate >= :startDate AND i.startDate <= :endDate")
+    Page<Initiative> findByStatusAndSiteAndInitiativeNumberContainingAndStartDateInFY(@Param("status") String status, @Param("site") String site, @Param("initiativeNumber") String initiativeNumber, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate, Pageable pageable);
+    
+
+    // ============================================================================
     // NEW: FY-based queries using startDate instead of createdAt
     // ============================================================================
     

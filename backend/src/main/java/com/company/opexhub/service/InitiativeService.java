@@ -137,37 +137,36 @@ public class InitiativeService {
                                                                String financialYear, String discipline, 
                                                                boolean isInitiativeNumberSearch, 
                                                                Pageable pageable) {
-        // Removed unnecessary INFO logs for financial year filtering
-        
         // Calculate financial year date range (same logic as DashboardService)
-        LocalDateTime[] fyRange = getFinancialYearRange(financialYear);
-        LocalDateTime fyStart = fyRange[0];
-        LocalDateTime fyEnd = fyRange[1];
+        // UPDATED: Now uses startDate for FY filtering instead of createdAt
+        LocalDate[] fyRange = getFinancialYearRange(financialYear);
+        LocalDate fyStart = fyRange[0];
+        LocalDate fyEnd = fyRange[1];
         
         Page<Initiative> result;
         
         if (status != null && site != null && search != null) {
             if (isInitiativeNumberSearch) {
-                result = initiativeRepository.findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(
+                result = initiativeRepository.findByStatusAndSiteAndInitiativeNumberContainingAndStartDateInFY(
                         status, site, search, fyStart, fyEnd, pageable);
             } else {
-                result = initiativeRepository.findByStatusAndSiteAndTitleContainingAndFinancialYear(
+                result = initiativeRepository.findByStatusAndSiteAndTitleContainingAndStartDateInFY(
                         status, site, search, fyStart, fyEnd, pageable);
             }
         } else if (search != null) {
             if (isInitiativeNumberSearch) {
-                result = initiativeRepository.findByInitiativeNumberContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
+                result = initiativeRepository.findByInitiativeNumberContainingAndStartDateInFY(search, fyStart, fyEnd, pageable);
             } else {
-                result = initiativeRepository.findByTitleContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
+                result = initiativeRepository.findByTitleContainingAndStartDateInFY(search, fyStart, fyEnd, pageable);
             }
         } else if (status != null && site != null) {
-            result = initiativeRepository.findByStatusAndSiteAndFinancialYear(status, site, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByStatusAndSiteAndStartDateInFY(status, site, fyStart, fyEnd, pageable);
         } else if (status != null) {
-            result = initiativeRepository.findByStatusAndFinancialYear(status, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByStatusAndStartDateInFY(status, fyStart, fyEnd, pageable);
         } else if (site != null) {
-            result = initiativeRepository.findBySiteAndFinancialYear(site, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findBySiteAndStartDateInFY(site, fyStart, fyEnd, pageable);
         } else {
-            result = initiativeRepository.findByFinancialYear(fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByStartDateInFY(fyStart, fyEnd, pageable);
         }
         
         // Apply discipline filter if provided
@@ -179,19 +178,17 @@ public class InitiativeService {
     }
     
     /**
-     * Get financial year date range for a specific year as LocalDateTime array [start, end]
-     * Same logic as DashboardService.getFinancialYearRange(String financialYear)
+     * Get financial year date range for a specific year as LocalDate array [start, end]
+     * Same logic as DashboardService.getFinancialYearDateRange(String financialYear)
+     * UPDATED: Now returns LocalDate[] for startDate filtering
      */
-    private LocalDateTime[] getFinancialYearRange(String financialYear) {
+    private LocalDate[] getFinancialYearRange(String financialYear) {
         int year = Integer.parseInt(financialYear); // e.g., 2025 for FY 2025-26
         
         LocalDate fyStart = LocalDate.of(year, 4, 1);       // April 1st, 2025
         LocalDate fyEnd = LocalDate.of(year + 1, 3, 31);    // March 31st, 2026
         
-        return new LocalDateTime[]{
-            fyStart.atStartOfDay(),
-            fyEnd.atTime(23, 59, 59)
-        };
+        return new LocalDate[]{fyStart, fyEnd};
     }
 
     public Optional<Initiative> getInitiativeById(Long id) {
