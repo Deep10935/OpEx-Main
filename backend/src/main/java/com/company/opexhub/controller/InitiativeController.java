@@ -44,9 +44,14 @@ public class InitiativeController {
             @RequestParam(required = false) String site,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String financialYear,
+            @RequestParam(required = false) String year,
+            @RequestParam(required = false) String discipline,
             Pageable pageable) {
         
-        Page<Initiative> initiatives = initiativeService.searchInitiatives(status, site, search, financialYear, pageable);
+        // Support both 'financialYear' and 'year' parameter names
+        String yearFilter = financialYear != null ? financialYear : year;
+        
+        Page<Initiative> initiatives = initiativeService.searchInitiatives(status, site, search, yearFilter, discipline, pageable);
         return initiatives.map(this::convertToResponse);
     }
 
@@ -192,6 +197,18 @@ public class InitiativeController {
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(new ApiResponse(false, "Error updating MOC/CAPEX requirements: " + e.getMessage()));
+        }
+    }
+    
+    // Get distinct years from initiatives for year filter
+    @GetMapping("/years")
+    public ResponseEntity<ApiResponse> getDistinctYears() {
+        try {
+            java.util.List<Integer> years = initiativeService.getDistinctYears();
+            return ResponseEntity.ok(new ApiResponse(true, "Years fetched successfully", years));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse(false, "Error fetching years: " + e.getMessage()));
         }
     }
 }

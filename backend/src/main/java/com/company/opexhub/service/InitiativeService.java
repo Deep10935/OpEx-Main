@@ -50,15 +50,22 @@ public class InitiativeService {
     }
     
     public Page<Initiative> searchInitiatives(String status, String site, String search, String financialYear, Pageable pageable) {
-        // Removed unnecessary INFO log for search parameters
-        
+        return searchInitiatives(status, site, search, financialYear, null, pageable);
+    }
+    
+    public Page<Initiative> searchInitiatives(String status, String site, String search, String financialYear, String discipline, Pageable pageable) {
         // Determine if search term looks like initiative number (contains slash or alphanumeric pattern)
         boolean isInitiativeNumberSearch = search != null && 
             (search.contains("/") || search.matches(".*[A-Z]+.*[0-9]+.*") || search.matches(".*[0-9]+.*[A-Z]+.*"));
         
         // If financial year is provided, use the FY-specific repository methods
         if (financialYear != null) {
-            return searchInitiativesWithFinancialYear(status, site, search, financialYear, isInitiativeNumberSearch, pageable);
+            return searchInitiativesWithFinancialYear(status, site, search, financialYear, discipline, isInitiativeNumberSearch, pageable);
+        }
+        
+        // If discipline filter is provided without year filter
+        if (discipline != null) {
+            return searchInitiativesWithDiscipline(status, site, search, discipline, isInitiativeNumberSearch, pageable);
         }
         
         // Original logic for non-FY searches
@@ -85,8 +92,50 @@ public class InitiativeService {
         }
     }
     
+    private Page<Initiative> searchInitiativesWithDiscipline(String status, String site, String search, 
+                                                            String discipline, boolean isInitiativeNumberSearch, 
+                                                            Pageable pageable) {
+        // Filter initiatives by discipline using Java stream (since we don't have specific queries)
+        if (status != null && site != null && search != null) {
+            Page<Initiative> allResults = isInitiativeNumberSearch 
+                ? initiativeRepository.findByStatusAndSiteAndInitiativeNumberContaining(status, site, search, pageable)
+                : initiativeRepository.findByStatusAndSiteAndTitleContaining(status, site, search, pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        } else if (search != null) {
+            Page<Initiative> allResults = isInitiativeNumberSearch
+                ? initiativeRepository.findByInitiativeNumberContaining(search, pageable)
+                : initiativeRepository.findByTitleContaining(search, pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        } else if (status != null && site != null) {
+            Page<Initiative> allResults = initiativeRepository.findByStatusAndSite(status, site, pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        } else if (status != null) {
+            Page<Initiative> allResults = initiativeRepository.findByStatus(status, pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        } else if (site != null) {
+            Page<Initiative> allResults = initiativeRepository.findBySite(site, pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        } else {
+            Page<Initiative> allResults = initiativeRepository.findAll(pageable);
+            return filterByDiscipline(allResults, discipline, pageable);
+        }
+    }
+    
+    private Page<Initiative> filterByDiscipline(Page<Initiative> page, String discipline, Pageable pageable) {
+        if (discipline == null || discipline.isEmpty()) {
+            return page;
+        }
+        
+        List<Initiative> filtered = page.getContent().stream()
+            .filter(i -> discipline.equalsIgnoreCase(i.getDiscipline()))
+            .collect(java.util.stream.Collectors.toList());
+            
+        return new org.springframework.data.domain.PageImpl<>(filtered, pageable, filtered.size());
+    }
+    
     private Page<Initiative> searchInitiativesWithFinancialYear(String status, String site, String search, 
-                                                               String financialYear, boolean isInitiativeNumberSearch, 
+                                                               String financialYear, String discipline, 
+                                                               boolean isInitiativeNumberSearch, 
                                                                Pageable pageable) {
         // Removed unnecessary INFO logs for financial year filtering
         
@@ -95,29 +144,38 @@ public class InitiativeService {
         LocalDateTime fyStart = fyRange[0];
         LocalDateTime fyEnd = fyRange[1];
         
+        Page<Initiative> result;
+        
         if (status != null && site != null && search != null) {
             if (isInitiativeNumberSearch) {
-                return initiativeRepository.findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(
+                result = initiativeRepository.findByStatusAndSiteAndInitiativeNumberContainingAndFinancialYear(
                         status, site, search, fyStart, fyEnd, pageable);
             } else {
-                return initiativeRepository.findByStatusAndSiteAndTitleContainingAndFinancialYear(
+                result = initiativeRepository.findByStatusAndSiteAndTitleContainingAndFinancialYear(
                         status, site, search, fyStart, fyEnd, pageable);
             }
         } else if (search != null) {
             if (isInitiativeNumberSearch) {
-                return initiativeRepository.findByInitiativeNumberContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
+                result = initiativeRepository.findByInitiativeNumberContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
             } else {
-                return initiativeRepository.findByTitleContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
+                result = initiativeRepository.findByTitleContainingAndFinancialYear(search, fyStart, fyEnd, pageable);
             }
         } else if (status != null && site != null) {
-            return initiativeRepository.findByStatusAndSiteAndFinancialYear(status, site, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByStatusAndSiteAndFinancialYear(status, site, fyStart, fyEnd, pageable);
         } else if (status != null) {
-            return initiativeRepository.findByStatusAndFinancialYear(status, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByStatusAndFinancialYear(status, fyStart, fyEnd, pageable);
         } else if (site != null) {
-            return initiativeRepository.findBySiteAndFinancialYear(site, fyStart, fyEnd, pageable);
+            result = initiativeRepository.findBySiteAndFinancialYear(site, fyStart, fyEnd, pageable);
         } else {
-            return initiativeRepository.findByFinancialYear(fyStart, fyEnd, pageable);
+            result = initiativeRepository.findByFinancialYear(fyStart, fyEnd, pageable);
         }
+        
+        // Apply discipline filter if provided
+        if (discipline != null && !discipline.isEmpty()) {
+            result = filterByDiscipline(result, discipline, pageable);
+        }
+        
+        return result;
     }
     
     /**
@@ -266,13 +324,20 @@ public class InitiativeService {
         // Map discipline to category code
         String categoryCode = getDisciplineCategoryCode(discipline);
         
-        // Get discipline-specific sequential number for the site
-        Long disciplineCount = initiativeRepository.countBySiteAndDisciplineAndYear(site, discipline, selectedYear);
-        String disciplineSequential = String.format("%02d", disciplineCount + 1);
+        // Get max discipline sequence from existing initiative numbers
+        Integer maxDisciplineSeq = initiativeRepository.getMaxDisciplineSequence(site, yearCode, categoryCode);
+        int nextDisciplineSeq = (maxDisciplineSeq != null ? maxDisciplineSeq : 0) + 1;
+        String disciplineSequential = String.format("%02d", nextDisciplineSeq);
         
-        // Get overall site-specific initiative number
-        Long siteCount = initiativeRepository.countBySiteAndYear(site, selectedYear);
-        String overallSequential = String.format("%03d", siteCount + 1);
+        // Get max overall sequence from existing initiative numbers
+        Integer maxOverallSeq = initiativeRepository.getMaxOverallSequence(site, yearCode);
+        int nextOverallSeq = (maxOverallSeq != null ? maxOverallSeq : 0) + 1;
+        String overallSequential = String.format("%03d", nextOverallSeq);
+        
+        loggingService.info("Generating initiative number - Site: " + site + ", Year: " + yearCode + 
+                          ", Discipline: " + categoryCode + ", Max Disc Seq: " + maxDisciplineSeq + 
+                          ", Next Disc Seq: " + nextDisciplineSeq + ", Max Overall Seq: " + maxOverallSeq + 
+                          ", Next Overall Seq: " + nextOverallSeq);
         
         // Format: ZZZ/YY/XX/AB/123
         return String.format("%s/%s/%s/%s/%s", 
@@ -297,6 +362,10 @@ public class InitiativeService {
             default:
                 return "OT"; // Default to Others
         }
+    }
+    
+    public List<Integer> getDistinctYears() {
+        return initiativeRepository.findDistinctYears();
     }
     
     // Add this method to handle MOC/CAPEX updates when Stage 6 is approved

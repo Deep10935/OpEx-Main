@@ -72,6 +72,34 @@ public interface InitiativeRepository extends JpaRepository<Initiative, Long> {
     @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND YEAR(i.createdAt) = :year")
     Long countBySiteAndYear(@Param("site") String site, @Param("year") Integer year);
     
+    // New queries based on startDate for accurate initiative number generation
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND i.discipline = :discipline AND YEAR(i.startDate) = :year")
+    Long countBySiteAndDisciplineAndStartDateYear(@Param("site") String site, @Param("discipline") String discipline, @Param("year") Integer year);
+    
+    @Query("SELECT COUNT(i) FROM Initiative i WHERE i.site = :site AND YEAR(i.startDate) = :year")
+    Long countBySiteAndStartDateYear(@Param("site") String site, @Param("year") Integer year);
+    
+    // Query to get max discipline sequence from initiative numbers
+    @Query(value = "SELECT MAX(CAST(REGEXP_SUBSTR(initiative_number, '[^/]+', 1, 4) AS NUMBER)) " +
+                   "FROM OPEX_INITIATIVES " +
+                   "WHERE site = :site " +
+                   "AND SUBSTR(initiative_number, INSTR(initiative_number, '/', 1, 2) + 1, 2) = :disciplineCode " +
+                   "AND SUBSTR(initiative_number, INSTR(initiative_number, '/', 1, 1) + 1, 2) = :yearCode", 
+           nativeQuery = true)
+    Integer getMaxDisciplineSequence(@Param("site") String site, @Param("yearCode") String yearCode, @Param("disciplineCode") String disciplineCode);
+    
+    // Query to get max overall sequence from initiative numbers
+    @Query(value = "SELECT MAX(CAST(REGEXP_SUBSTR(initiative_number, '[^/]+', 1, 5) AS NUMBER)) " +
+                   "FROM OPEX_INITIATIVES " +
+                   "WHERE site = :site " +
+                   "AND SUBSTR(initiative_number, INSTR(initiative_number, '/', 1, 1) + 1, 2) = :yearCode", 
+           nativeQuery = true)
+    Integer getMaxOverallSequence(@Param("site") String site, @Param("yearCode") String yearCode);
+    
+    // Query to get distinct years from initiative start dates
+    @Query("SELECT DISTINCT YEAR(i.startDate) FROM Initiative i WHERE i.startDate IS NOT NULL ORDER BY YEAR(i.startDate) DESC")
+    List<Integer> findDistinctYears();
+    
     // Performance Analysis Queries
     @Query("SELECT COUNT(i) FROM Initiative i WHERE LOWER(COALESCE(i.budgetType, 'budgeted')) = :budgetType")
     Long countByBudgetType(@Param("budgetType") String budgetType);

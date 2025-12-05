@@ -156,6 +156,8 @@ export const initiativeAPI = {
     page?: number;
     size?: number;
     financialYear?: string;
+    year?: string;
+    discipline?: string;
   }) => {
     const response = await api.get('/initiatives', { params });
     return response.data;
@@ -178,6 +180,11 @@ export const initiativeAPI = {
   
   delete: async (id: number) => {
     const response = await api.delete(`/initiatives/${id}`);
+    return response.data;
+  },
+  
+  getYears: async () => {
+    const response = await api.get('/initiatives/years');
     return response.data;
   }
 };
