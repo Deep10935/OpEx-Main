@@ -7,6 +7,8 @@ export const useInitiatives = (filters?: {
   site?: string;
   search?: string;
   financialYear?: string;
+  year?: string;
+  discipline?: string;
 }) => {
   return useQuery({
     queryKey: ['initiatives', filters],
@@ -30,6 +32,14 @@ export const useInitiatives = (filters?: {
             i.description.toLowerCase().includes(filters.search!.toLowerCase()) ||
             (i.initiativeNumber && i.initiativeNumber.toLowerCase().includes(filters.search!.toLowerCase()))
           );
+        }
+        if (filters?.year) {
+          filtered = filtered.filter(i => 
+            i.startDate && new Date(i.startDate).getFullYear().toString() === filters.year
+          );
+        }
+        if (filters?.discipline) {
+          filtered = filtered.filter(i => i.discipline === filters.discipline);
         }
         return { content: filtered, totalElements: filtered.length };
       }

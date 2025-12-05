@@ -756,13 +756,43 @@ export default function Initiatives({ user }: InitiativesProps) {
   const [itemsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState("all");
   const [siteFilter, setSiteFilter] = useState(user.site || "all"); // Default to logged-in user's site
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString()); // Default to current year
+  const [disciplineFilter, setDisciplineFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Use real API or fallback to mock data
+  // Fetch available years dynamically from backend
+  const { data: availableYears } = useInitiatives({});
+  const years = React.useMemo(() => {
+    if (availableYears?.content) {
+      const uniqueYears = new Set<string>();
+      availableYears.content.forEach((item: any) => {
+        if (item.startDate) {
+          const year = new Date(item.startDate).getFullYear().toString();
+          uniqueYears.add(year);
+        }
+      });
+      return Array.from(uniqueYears).sort((a, b) => parseInt(b) - parseInt(a));
+    }
+    return [];
+  }, [availableYears]);
+
+  // Reset pagination when filters change (excluding searchTerm for better performance)
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, siteFilter, yearFilter, disciplineFilter]);
+
+  // Reset pagination when search term changes (separate effect for search)
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Use real API or fallback to mock data - search is done on frontend
   const { data: apiInitiatives, isLoading, error } = useInitiatives({
     status: statusFilter !== "all" ? statusFilter : undefined,
     site: siteFilter !== "all" ? siteFilter : undefined,
-    search: searchTerm || undefined,
+    year: yearFilter !== "all" ? yearFilter : undefined,
+    discipline: disciplineFilter !== "all" ? disciplineFilter : undefined,
+    // Removed search from API call - search will be done on frontend for better performance
   });
 
   // Use API data if available, otherwise fallback to mock data
@@ -869,12 +899,20 @@ export default function Initiatives({ user }: InitiativesProps) {
     // Exact status matching with database STATUS column values
     const matchesStatus = statusFilter === "all" || initiative.status.trim() === statusFilter;
     const matchesSite = siteFilter === "all" || initiative.site === siteFilter;
+    
+    // Year filter based on start date
+    const matchesYear = yearFilter === "all" || 
+      (initiative.startDate && new Date(initiative.startDate).getFullYear().toString() === yearFilter);
+    
+    // Discipline filter
+    const matchesDiscipline = disciplineFilter === "all" || initiative.discipline === disciplineFilter;
+    
     const matchesSearch = searchTerm === "" || 
       (initiative.title && initiative.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (initiative.initiativeNumber && initiative.initiativeNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (initiative.id && initiative.id.toString().toLowerCase().includes(searchTerm.toLowerCase()));
     
-    return matchesStatus && matchesSite && matchesSearch;
+    return matchesStatus && matchesSite && matchesYear && matchesDiscipline && matchesSearch;
   });
 
   // Paginate filtered results
@@ -969,7 +1007,7 @@ export default function Initiatives({ user }: InitiativesProps) {
                 className="pl-8 h-9 text-xs"
               />
             </div>
-            <div className="flex gap-2.5">
+            <div className="flex flex-wrap gap-2.5">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-32 h-9 text-xs">
                   <Filter className="h-3.5 w-3.5 mr-1.5" />
@@ -980,8 +1018,8 @@ export default function Initiatives({ user }: InitiativesProps) {
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value="In Progress">In Progress</SelectItem>
                   <SelectItem value="Completed">Completed</SelectItem>
-                    <SelectItem value="Dropped">Dropped</SelectItem>
-                      <SelectItem value="Rejected">Rejected</SelectItem>
+                  <SelectItem value="Dropped">Dropped</SelectItem>
+                  <SelectItem value="Rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -997,6 +1035,35 @@ export default function Initiatives({ user }: InitiativesProps) {
                   <SelectItem value="HSD">HSD</SelectItem>
                   <SelectItem value="APL">APL</SelectItem>
                   <SelectItem value="TCD">TCD</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={yearFilter} onValueChange={setYearFilter}>
+                <SelectTrigger className="w-28 h-9 text-xs">
+                  <SelectValue placeholder="All Years" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {years.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={disciplineFilter} onValueChange={setDisciplineFilter}>
+                <SelectTrigger className="w-40 h-9 text-xs">
+                  <SelectValue placeholder="All Disciplines" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Disciplines</SelectItem>
+                  <SelectItem value="Operation">Operation</SelectItem>
+                  <SelectItem value="Engineering And Utility">Engineering And Utility</SelectItem>
+                  <SelectItem value="Environment">Environment</SelectItem>
+                  <SelectItem value="Safety">Safety</SelectItem>
+                  <SelectItem value="Quality">Quality</SelectItem>
+                  <SelectItem value="Others">Others</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -17,6 +17,8 @@ export interface Initiative {
   initiativeNumber: string;
   initiator: string;
   submittedDate: string;
+  startDate?: string;
+  endDate?: string;
   currentStage: number;
   status: string;
   expectedSavings: string;
