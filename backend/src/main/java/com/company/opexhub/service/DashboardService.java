@@ -38,17 +38,17 @@ public class DashboardService {
      * Get dashboard statistics (default - current financial year)
      */
     public DashboardStatsDTO getDashboardStats() {
-        return getDashboardStats(null);
+        return getDashboardStats(null, null);
     }
 
     /**
      * Get dashboard statistics for a specific financial year or all years
      */
     /**
-     * Get dashboard statistics for a specific financial year or all years
+     * Get dashboard statistics for a specific financial year or all years with optional quarter filter
      * UPDATED: Now uses startDate for FY filtering instead of createdAt
      */
-    public DashboardStatsDTO getDashboardStats(String financialYear) {
+    public DashboardStatsDTO getDashboardStats(String financialYear, String quarter) {
         LocalDateTime[] fyRange;
         LocalDate[] fyDateRange;
         String[] monthRange;
@@ -60,14 +60,20 @@ public class DashboardService {
             // Use specified financial year
             fyRange = getFinancialYearRange(financialYear);
             fyDateRange = getFinancialYearDateRange(financialYear);
-            monthRange = getFinancialYearMonthRange(financialYear);
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(financialYear, quarter) 
+                : getFinancialYearMonthRange(financialYear);
             prevFyDateRange = getPreviousFinancialYearDateRange(financialYear);
             prevMonthRange = getPreviousFinancialYearMonthRange(financialYear);
         } else {
             // Use current financial year for comparison (when showing all years)
             fyRange = getFinancialYearRange();
             fyDateRange = getFinancialYearDateRange();
-            monthRange = getFinancialYearMonthRange();
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(quarter) 
+                : getFinancialYearMonthRange();
             prevFyDateRange = getPreviousFinancialYearDateRange();
             prevMonthRange = getPreviousFinancialYearMonthRange();
         }
@@ -197,14 +203,14 @@ public class DashboardService {
      * Get dashboard statistics for a specific site - default current financial year
      */
     public DashboardStatsDTO getDashboardStatsBySite(String site) {
-        return getDashboardStatsBySite(site, null);
+        return getDashboardStatsBySite(site, null, null);
     }
 
     /**
-     * Get dashboard statistics for a specific site and financial year or all years
+     * Get dashboard statistics for a specific site and financial year or all years with optional quarter filter
      * UPDATED: Now uses startDate for FY filtering instead of createdAt
      */
-    public DashboardStatsDTO getDashboardStatsBySite(String site, String financialYear) {
+    public DashboardStatsDTO getDashboardStatsBySite(String site, String financialYear, String quarter) {
         LocalDateTime[] fyRange;
         LocalDate[] fyDateRange;
         String[] monthRange;
@@ -216,14 +222,20 @@ public class DashboardService {
             // Use specified financial year
             fyRange = getFinancialYearRange(financialYear);
             fyDateRange = getFinancialYearDateRange(financialYear);
-            monthRange = getFinancialYearMonthRange(financialYear);
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(financialYear, quarter) 
+                : getFinancialYearMonthRange(financialYear);
             prevFyDateRange = getPreviousFinancialYearDateRange(financialYear);
             prevMonthRange = getPreviousFinancialYearMonthRange(financialYear);
         } else {
             // Use current financial year for comparison (when showing all years)
             fyRange = getFinancialYearRange();
             fyDateRange = getFinancialYearDateRange();
-            monthRange = getFinancialYearMonthRange();
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(quarter) 
+                : getFinancialYearMonthRange();
             prevFyDateRange = getPreviousFinancialYearDateRange();
             prevMonthRange = getPreviousFinancialYearMonthRange();
         }
@@ -328,13 +340,13 @@ public class DashboardService {
      * Get Performance Analysis Dashboard Data - default current financial year
      */
     public PerformanceAnalysisDTO getPerformanceAnalysis() {
-        return getPerformanceAnalysis(null);
+        return getPerformanceAnalysis(null, null);
     }
 
     /**
-     * Get Performance Analysis Dashboard Data for a specific financial year or all years
+     * Get Performance Analysis Dashboard Data for a specific financial year or all years with optional quarter filter
      */
-    public PerformanceAnalysisDTO getPerformanceAnalysis(String financialYear) {
+    public PerformanceAnalysisDTO getPerformanceAnalysis(String financialYear, String quarter) {
         String currentFY;
         LocalDateTime[] fyRange;
         String[] monthRange;
@@ -343,11 +355,17 @@ public class DashboardService {
         if (!isAllYears) {
             currentFY = formatFinancialYear(financialYear);
             fyRange = getFinancialYearRange(financialYear);
-            monthRange = getFinancialYearMonthRange(financialYear);
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(financialYear, quarter) 
+                : getFinancialYearMonthRange(financialYear);
         } else {
             currentFY = "All Years";
             fyRange = getFinancialYearRange();
-            monthRange = getFinancialYearMonthRange();
+            // Apply quarter filter if specified
+            monthRange = (quarter != null && !quarter.isEmpty() && !"all".equalsIgnoreCase(quarter)) 
+                ? getQuarterMonthRange(quarter) 
+                : getFinancialYearMonthRange();
         }
         
         LocalDateTime fyStart = fyRange[0];
@@ -374,13 +392,13 @@ public class DashboardService {
      * Get Performance Analysis Dashboard Data for a specific site - default current financial year
      */
     public PerformanceAnalysisDTO getPerformanceAnalysisBySite(String site) {
-        return getPerformanceAnalysisBySite(site, null);
+        return getPerformanceAnalysisBySite(site, null, null);
     }
 
     /**
-     * Get Performance Analysis Dashboard Data for a specific site and financial year or all years
+     * Get Performance Analysis Dashboard Data for a specific site and financial year or all years with optional quarter filter
      */
-    public PerformanceAnalysisDTO getPerformanceAnalysisBySite(String site, String financialYear) {
+    public PerformanceAnalysisDTO getPerformanceAnalysisBySite(String site, String financialYear, String quarter) {
         String currentFY;
         LocalDateTime[] fyRange;
         String[] monthRange;
@@ -987,6 +1005,99 @@ public class DashboardService {
         
         String startMonth = (year - 1) + "-04";     // "2024-04"
         String endMonth = year + "-03";             // "2025-03"
+        
+        return new String[]{startMonth, endMonth};
+    }
+    
+    /**
+     * Get quarter month range based on Indian Financial Year
+     * Q1: April-June, Q2: July-September, Q3: October-December, Q4: January-March
+     */
+    private String[] getQuarterMonthRange(String financialYear, String quarter) {
+        if (quarter == null || quarter.isEmpty() || "all".equalsIgnoreCase(quarter)) {
+            // Return full FY range if no quarter specified
+            return getFinancialYearMonthRange(financialYear);
+        }
+        
+        int year = Integer.parseInt(financialYear); // e.g., 2025 for FY 2025-26
+        String startMonth, endMonth;
+        
+        switch (quarter.toUpperCase()) {
+            case "Q1":
+                // Q1: April-June
+                startMonth = year + "-04";
+                endMonth = year + "-06";
+                break;
+            case "Q2":
+                // Q2: July-September
+                startMonth = year + "-07";
+                endMonth = year + "-09";
+                break;
+            case "Q3":
+                // Q3: October-December
+                startMonth = year + "-10";
+                endMonth = year + "-12";
+                break;
+            case "Q4":
+                // Q4: January-March (next year)
+                startMonth = (year + 1) + "-01";
+                endMonth = (year + 1) + "-03";
+                break;
+            default:
+                // Default to full FY range
+                return getFinancialYearMonthRange(financialYear);
+        }
+        
+        return new String[]{startMonth, endMonth};
+    }
+    
+    /**
+     * Get quarter month range for current financial year
+     */
+    private String[] getQuarterMonthRange(String quarter) {
+        if (quarter == null || quarter.isEmpty() || "all".equalsIgnoreCase(quarter)) {
+            // Return full FY range if no quarter specified
+            return getFinancialYearMonthRange();
+        }
+        
+        LocalDate today = LocalDate.now();
+        int year = today.getYear();
+        
+        // Determine current FY year
+        int fyYear;
+        if (today.getMonthValue() >= 4) {
+            fyYear = year; // Current FY: year-year+1
+        } else {
+            fyYear = year - 1; // Current FY: year-1 to year
+        }
+        
+        String startMonth, endMonth;
+        
+        switch (quarter.toUpperCase()) {
+            case "Q1":
+                // Q1: April-June
+                startMonth = fyYear + "-04";
+                endMonth = fyYear + "-06";
+                break;
+            case "Q2":
+                // Q2: July-September
+                startMonth = fyYear + "-07";
+                endMonth = fyYear + "-09";
+                break;
+            case "Q3":
+                // Q3: October-December
+                startMonth = fyYear + "-10";
+                endMonth = fyYear + "-12";
+                break;
+            case "Q4":
+                // Q4: January-March (next year)
+                startMonth = (fyYear + 1) + "-01";
+                endMonth = (fyYear + 1) + "-03";
+                break;
+            default:
+                // Default to full FY range
+                return getFinancialYearMonthRange();
+        }
         
         return new String[]{startMonth, endMonth};
     }

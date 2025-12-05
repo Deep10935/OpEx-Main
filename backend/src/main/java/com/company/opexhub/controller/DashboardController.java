@@ -22,8 +22,9 @@ public class DashboardController {
      */
     @GetMapping("/stats")
     public ResponseEntity<DashboardStatsDTO> getDashboardStats(
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
-        DashboardStatsDTO stats = dashboardService.getDashboardStats(financialYear);
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
+        DashboardStatsDTO stats = dashboardService.getDashboardStats(financialYear, quarter);
         return ResponseEntity.ok(stats);
     }
 
@@ -33,8 +34,9 @@ public class DashboardController {
     @GetMapping("/stats/{site}")
     public ResponseEntity<DashboardStatsDTO> getDashboardStatsBySite(
             @PathVariable String site, 
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
-        DashboardStatsDTO stats = dashboardService.getDashboardStatsBySite(site, financialYear);
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
+        DashboardStatsDTO stats = dashboardService.getDashboardStatsBySite(site, financialYear, quarter);
         return ResponseEntity.ok(stats);
     }
 
@@ -43,7 +45,8 @@ public class DashboardController {
      */
     @GetMapping("/recent-initiatives")
     public ResponseEntity<List<RecentInitiativeDTO>> getRecentInitiatives(
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
         List<RecentInitiativeDTO> recentInitiatives = dashboardService.getRecentInitiatives(financialYear);
         return ResponseEntity.ok(recentInitiatives);
     }
@@ -54,7 +57,8 @@ public class DashboardController {
     @GetMapping("/recent-initiatives/{site}")
     public ResponseEntity<List<RecentInitiativeDTO>> getRecentInitiativesBySite(
             @PathVariable String site, 
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
         List<RecentInitiativeDTO> recentInitiatives = dashboardService.getRecentInitiativesBySite(site, financialYear);
         return ResponseEntity.ok(recentInitiatives);
     }
@@ -64,8 +68,9 @@ public class DashboardController {
      */
     @GetMapping("/performance-analysis")
     public ResponseEntity<PerformanceAnalysisDTO> getPerformanceAnalysis(
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
-        PerformanceAnalysisDTO performanceAnalysis = dashboardService.getPerformanceAnalysis(financialYear);
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
+        PerformanceAnalysisDTO performanceAnalysis = dashboardService.getPerformanceAnalysis(financialYear, quarter);
         return ResponseEntity.ok(performanceAnalysis);
     }
 
@@ -75,8 +80,9 @@ public class DashboardController {
     @GetMapping("/performance-analysis/{site}")
     public ResponseEntity<PerformanceAnalysisDTO> getPerformanceAnalysisBySite(
             @PathVariable String site, 
-            @RequestParam(value = "financialYear", required = false) String financialYear) {
-        PerformanceAnalysisDTO performanceAnalysis = dashboardService.getPerformanceAnalysisBySite(site, financialYear);
+            @RequestParam(value = "financialYear", required = false) String financialYear,
+            @RequestParam(value = "quarter", required = false) String quarter) {
+        PerformanceAnalysisDTO performanceAnalysis = dashboardService.getPerformanceAnalysisBySite(site, financialYear, quarter);
         return ResponseEntity.ok(performanceAnalysis);
     }
 
